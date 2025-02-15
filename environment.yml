@@ -1,0 +1,18 @@
+name: protenix-dock
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.9,<3.12
+  - pip
+  - pandas
+  - ambertools=23
+  - numpy
+  - swig
+  - boost=1.82
+  - sphinx
+  - sphinx_rtd_theme
+  - curl
+  - openssl
+  - cmake
+  - pip:
+    - -r requirements.txt

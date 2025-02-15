@@ -1,0 +1,13 @@
+TITLE     {{mol_name}}
+{% for record in records -%}
+{%- if record.record_name == 'ATOM' or record.record_name == 'HETATM' -%}
+{{'%-6s' % record.record_name}}{{'%5d' % record.nr|int}} {{'%4s' % record.name}}{{'%1s' % record.altloc}}{{'%3s' % record.residue_name}} {{'%1s' % record.chain_id}}{{'%4d' % record.residue_num|int}}{{'%1s' % record.icode}}   {{'%8.3f' % (record.x*10.0)|float}}{{'%8.3f' % (record.y*10.0)|float}}{{'%8.3f' % (record.z*10.0)|float}}{{'%6.2f' % (record.occupancy|float)}}{{'%6.2f' % (record.temp_factor|float)}}          {{'%2s' % record.element}}{{'%2s' % record.charge_str}}
+{% endif -%}
+{%- if record.record_name == 'TER' -%}
+{{'%-6s' % record.record_name}}{{'%5d' % record.nr|int}} {{'%4s' % record.name}} {{'%3s' % record.residue_name}} {{'%1s' % record.chain_id}}{{'%4d' % record.residue_num|int}}{{'%1s' % record.icode}}
+{% endif -%}
+{%- if record.record_name == 'CONECT' -%}
+{{'%-6s' % record.record_name}}{%- for nr in record.nr -%}{{'%5d' % nr|int}}{%- endfor %}
+{% endif -%}
+{% endfor -%}
+END

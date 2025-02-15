@@ -1,0 +1,13 @@
+byteff @ git+https://github.com/bytedance/byteff.git@9f67b6ae6b21f093964d9997ecc04499cc084484
+AutoDockTools_py3 @ git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3@da0c87cac6a8a5b4cb6d1670f48e05d63f008dbf
+pandas>=1.3.5
+tos>=2.6.0
+func-timeout~=4.3.5
+parmed~=4.3.0
+pdb4amber~=1.4.1
+MDAnalysis
+vina @ https://files.pythonhosted.org/packages/75/b2/1dad979aea28fcca8aa06832744aa1b62ab80cad08980115a580a4861b8d/vina-1.2.5.tar.gz
+PyYaml
+pdb2pqr~=3.6.1
+meeko~=0.3.3
+pytest
