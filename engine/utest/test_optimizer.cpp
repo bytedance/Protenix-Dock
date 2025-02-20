@@ -56,13 +56,13 @@ protected:
         "piring5_atomidx": [],
         "piring6_atomidx": [],
         "tstrain_atomidx": [],
-        "tstrain_params": [],
+        "tstrain_params_pose_selection": [],
         "hbonddon_charged_atomidx": [],
         "hbonddon_neut_atomidx": [],
         "hbondacc_charged_atomidx": [],
         "hbondacc_neut_atomidx": [],
         "partial_charges": [-0.5409, 0.6301, -0.6651],
-        "FF_vdW_paraidx": [19, 13, 16],
+        "FF_vdW_paraidx": [1019, 1013, 1016],
         "rotatable_bond_index": [],
         "bond_index": [],
         "atomic_numbers": [],
@@ -182,15 +182,15 @@ TEST_F(OptimizerTest, ProbeZeroThetas) {
     out.torsions.resize(ntorsions, 0.);
     lbfgs_step o1(1, 8);
     o1.apply(model, out);
-    EXPECT_NEAR(-66.2703, out.energy, 1e-4);
-    std::vector<param_t> ref_tosions = {1.7399, -0.1192, 0.0154};
+    EXPECT_NEAR(-65.1168, out.energy, 1e-4);
+    std::vector<param_t> ref_tosions = {1.7078, -0.1169, 0.0151};
     for (size_t i = 0; i < ntorsions; i++) {
         EXPECT_NEAR(ref_tosions[i], out.torsions[i], 1e-4);
     }
     molecule_pose ref_xyz = {
-        {12.3818, 26.7147, 6.1795},
-        { 7.2128, 22.1888, 5.0975},
-        {12.6529, 26.2327, 6.4881}
+        {12.3282, 26.6937, 6.1659},
+        { 7.2854, 22.2396, 5.1075},
+        {12.6085, 26.1862, 6.4895}
     };
     for (size_t i = 0; i < out.ligand_xyz.size(); i++) {
         check_3d(ref_xyz[i].xyz, out.ligand_xyz[i].xyz, 1e-4);
@@ -205,15 +205,15 @@ TEST_F(OptimizerTest, RunMoreIterations) {
     out.torsions = {1., 2., 3.};
     lbfgs_step o2(2, 12);
     o2.apply(model, out);
-    EXPECT_NEAR(-75.9029, out.energy, 1e-4);
-    std::vector<param_t> ref_tosions = {0.3791, 2.6009, 2.9846};
+    EXPECT_NEAR(-75.4551, out.energy, 1e-4);
+    std::vector<param_t> ref_tosions = {0.3757, 2.6070, 2.9846};
     for (size_t i = 0; i < ntorsions; i++) {
         EXPECT_NEAR(ref_tosions[i], out.torsions[i], 2e-4);
     }
     molecule_pose ref_xyz = {
-        {12.6351, 27.4424,  6.1808},
-        { 7.5941, 21.4569,  5.0175},
-        {12.3234, 26.6055,  6.5765}
+        {12.6585, 27.4573,  6.1878},
+        { 7.5778, 21.4340,  5.0107},
+        {12.3453, 26.6342,  6.5759}
     };
     for (size_t i = 0; i < out.ligand_xyz.size(); i++) {
         check_3d(ref_xyz[i].xyz, out.ligand_xyz[i].xyz, 2e-4);
