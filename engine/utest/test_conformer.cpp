@@ -114,7 +114,7 @@ protected:
         "piring5_atomidx": [],
         "piring6_atomidx": [],
         "tstrain_atomidx": [],
-        "tstrain_params": [],
+        "tstrain_params_pose_selection": [],
         "hbonddon_charged_atomidx": [],
         "hbonddon_neut_atomidx": [],
         "hbondacc_charged_atomidx": [],

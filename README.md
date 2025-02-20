@@ -2,6 +2,8 @@
 
 This repository hosts the source code for our work "Protenix-Dock: An accurate and trainable end-to-end protein-ligand docking framework using empirical scoring functions".  
 
+For more information about the implementation and the performance of Protenix-Dock, see our [technical report](ProtenixDock_Technical_Report.pdf).
+
 ## Features
 
 ✨ Advanced docking conformation sampling.
@@ -12,7 +14,7 @@ This repository hosts the source code for our work "Protenix-Dock: An accurate a
 
 ✨ Easy-to-use Python API and command-line tools.
 
-### Coming Soon
+### Work in progress
 
 🚧 Affinity-ranking score checkpoint and screening power evaluation result.
 
@@ -25,7 +27,7 @@ This repository hosts the source code for our work "Protenix-Dock: An accurate a
 To minimize environment setup cost, it is recommended to create an Conda environment.
 
 ```bash
-git clone https://url/to/this/repo/protenix-dock.git
+git clone https://github.com/bytedance/Protenix-Dock.git
 cd protenix-dock
 
 sudo apt-get update && sudo apt-get install -y libxrender1 libxext6

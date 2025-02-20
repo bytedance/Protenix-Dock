@@ -385,13 +385,13 @@ TEST(InterMolecularTest, ReceptorXyzToTorison) {
         "piring5_atomidx": [],
         "piring6_atomidx": [],
         "tstrain_atomidx": [],
-        "tstrain_params": [],
+        "tstrain_params_pose_selection": [],
         "hbonddon_charged_atomidx": [],
         "hbonddon_neut_atomidx": [],
         "hbondacc_charged_atomidx": [],
         "hbondacc_neut_atomidx": [],
         "partial_charges": [-0.5409, 0.6301, -0.6651],
-        "FF_vdW_paraidx": [19, 13, 16],
+        "FF_vdW_paraidx": [1019, 1013, 1016],
         "rotatable_bond_index": [],
         "bond_index": [],
         "atomic_numbers": [],
@@ -430,7 +430,7 @@ TEST(InterMolecularTest, ReceptorXyzToTorison) {
     molecule_pose ligand_xyz = std::move(ligand->get_pose(0));
     double energy = bsi.put_gradients(receptor_torsions, ligand_xyz,
                                       torsion_gradient, ligand_gradient);
-    double ref_energy = -24.8613;
+    double ref_energy = -24.8695;
     EXPECT_NEAR(ref_energy, energy, 4e-5);
     std::vector<param_t> ref_gradient = {-1.6258,  0.1114, -0.0144};
     for (size_t i = 0; i < ntorsions; i++) {
@@ -444,7 +444,7 @@ TEST(InterMolecularTest, ReceptorXyzToTorison) {
     }
     energy = bsi.put_gradients(receptor_torsions, ligand_xyz,
                                torsion_gradient, ligand_gradient);
-    ref_energy = -25.5083;
+    ref_energy = -25.51645;
     EXPECT_NEAR(ref_energy, energy, 5e-5);
     ref_gradient = {-1.6258, -0.5845, -0.0027};
     for (size_t i = 0; i < ntorsions; i++) {
