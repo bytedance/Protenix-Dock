@@ -72,6 +72,21 @@ popd
 
 #### Run with Python (recommended):
 
+#### Run with Python (recommended):
+
+* Autobox (easy benchmark)
+```python
+from pxdock import ProtenixDock
+receptor_pdb = "path/to/receptor.pdb"
+true_ligand_sdf = "path/to/true_ligand.sdf"
+ligand_sdf = "path/to/ligand.sdf"
+
+dock_instance = ProtenixDock(receptor_pdb)
+dock_instance.autobox(true_ligand_sdf)
+out_dir = dock_instance.run_docking(ligand_sdf)
+```
+
+* Manual input: 
 ```python
 from pxdock import ProtenixDock
 receptor_pdb = "path/to/receptor.pdb"
