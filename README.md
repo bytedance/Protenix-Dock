@@ -84,6 +84,8 @@ dock_instance.set_box(box_center, box_size)
 
 # Optional: you can generate cache maps for receptor, and then you can load it for next docking.
 # out_dir = dock_instance.generate_cache_maps(spacing=0.5)
+# in next run: 
+# dock_engine.load_cache_maps(out_dir)
 
 # the docking_res_files is in json format.
 docking_res_files = dock_instance.run_docking(ligand_sdf)
