@@ -219,7 +219,7 @@ VDW_VINA = [
 ]
 
 
-def mapped_smiles_to_atoms(mapped_smiles):
+def mapped_smiles_to_atoms(mapped_smiles: str) -> list[str]:
     matches = re.findall(r"\[([A-Za-z@\+\-]+):(\d+)", mapped_smiles)
     sorted_atoms = [
         match[0].rstrip("+-@").capitalize()
@@ -228,7 +228,7 @@ def mapped_smiles_to_atoms(mapped_smiles):
     return sorted_atoms
 
 
-def mapped_smiles_to_atomic_numbers(mapped_smiles):
+def mapped_smiles_to_atomic_numbers(mapped_smiles: str) -> list[int]:
     sorted_atoms = mapped_smiles_to_atoms(mapped_smiles)
     return [ELEMENTS_TO_ATOMIC_NUMBERS[x] for x in sorted_atoms]
 

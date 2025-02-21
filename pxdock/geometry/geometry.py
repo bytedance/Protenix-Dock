@@ -74,7 +74,7 @@ class ReceptorGeometry(BaseGeometry):
 
         self.leaf_level = self.frag_traverse_levels[1]
 
-        for frag_size in [2, 3, 4]:
+        for frag_size in (2, 3, 4):
             fragments = []
             rot_bond_1 = []
             rot_bond_2 = []

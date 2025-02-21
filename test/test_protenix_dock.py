@@ -38,16 +38,16 @@ class ProtenixDockTest(unittest.TestCase):
         pocket_config = parse_pocket_config(
             os.path.join(current_dir, "../examples/5s8i_pocket.config")
         )
-        cls.box_center = [
+        cls.box_center = (
             pocket_config["center_x"],
             pocket_config["center_y"],
             pocket_config["center_z"],
-        ]
-        cls.box_size = [
+        )
+        cls.box_size = (
             pocket_config["size_x"],
             pocket_config["size_y"],
             pocket_config["size_z"],
-        ]
+        )
 
     @pytest.mark.slow
     def test_pose_opt_with_cache(self):

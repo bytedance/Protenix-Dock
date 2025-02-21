@@ -123,8 +123,8 @@ class MolBase:
         }
 
     @staticmethod
-    def find_hyda(rkmol, all_atoms):
-        """Select all carbon atoms which have only carbons and/or hydrogens as direct neighbors."""
+    def find_hyda(rkmol, all_atoms) -> list:
+        """Hydrophobic acceptors: carbon atoms w/ only Cs and/or Hs as direct neighbors."""
         atom_set = []
         data = namedtuple("hydrophobic", "atom idx")
         hydrophobic_smarts = (
@@ -140,7 +140,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_hba(rkmol, all_atoms):
+    def find_hba(rkmol, all_atoms) -> list:
         """Find all possible hydrogen bond acceptors"""
         data = namedtuple("hbondacceptor", "atom idx")
         atom_set = []
@@ -161,7 +161,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_hbd(rkmol, all_atoms):
+    def find_hbd(rkmol, all_atoms) -> list:
         """Find all possible hydrogen bond donar"""
         data = namedtuple("hbonddonar", "atom idx")
         atom_set = []
@@ -181,7 +181,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_xba(rkmol, all_atoms):
+    def find_xba(rkmol, all_atoms) -> list:
         """Find all possible Halogen bond acceptors"""
         data = namedtuple("halogenacceptor", "atom idx")
         atom_set = []
@@ -201,7 +201,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_xbd(rkmol, all_atoms):
+    def find_xbd(rkmol, all_atoms) -> list:
         """Find all possible Halogen bond donar"""
         data = namedtuple("halogendonar", "atom idx")
         atom_set = []
@@ -221,7 +221,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_cationa(rkmol, all_atoms):
+    def find_cationa(rkmol, all_atoms) -> list:
         """Find all possible cationic atom"""
         data = namedtuple("cationa", "atom idx")
         atom_set = []
@@ -238,7 +238,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_aniona(rkmol, all_atoms):
+    def find_aniona(rkmol, all_atoms) -> list:
         """Find all possible anionaic atom"""
         data = namedtuple("aniona", "atom idx")
         atom_set = []
@@ -281,7 +281,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_metda(rkmol, all_atoms):
+    def find_metda(rkmol, all_atoms) -> list:
         """Find Metal donar atoms"""
         data = namedtuple("metal_donar", "atom idx")
         atom_set = []
@@ -299,7 +299,7 @@ class MolBase:
         return atom_set
 
     @staticmethod
-    def find_metaa(rkmol, all_atoms):
+    def find_metaa(rkmol, all_atoms) -> list:
         """Find Metal acceptor atoms"""
         data = namedtuple("metal_acceptor", "atom idx")
         atom_set = []
@@ -321,7 +321,7 @@ class MolBase:
     @staticmethod
     def find_torsion_strain_bonds(
         rkmol, score_function_json=None, task="pose_selection"
-    ):
+    ) -> list:
         """Find all possible bonds which maybe penalized by torsion strain"""
 
         tstrain_ffdata = namedtuple(
@@ -347,7 +347,7 @@ class MolBase:
             map_list = [idx_map[x] for x in sorted(idx_map)]
             full_matches = rkmol.GetSubstructMatches(patt_mol, uniquify=False)
             full_matches = set(
-                [tuple(match[x] for x in map_list) for match in full_matches]
+                tuple(match[x] for x in map_list) for match in full_matches
             )
             # [n_match, 4]
 

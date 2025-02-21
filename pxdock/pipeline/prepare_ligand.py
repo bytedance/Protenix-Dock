@@ -28,7 +28,7 @@ from pxdock.parser.ligand import LigandParser, generate_candidate_confs
 logger = get_logger(__name__)
 
 
-def parse_geometry(text):
+def parse_geometry(text: str) -> dict:
     ligand_data = json.loads(text)
     geo = LigandGeometry(ligand_data["bond_index"], ligand_data["is_rotatable"])
     ligand_data["geometry"] = {
@@ -43,8 +43,8 @@ def parse_geometry(text):
 
 
 def prepare_ligand(
-    ligand_file, out_dir=None, include_geometry=True, debug=False, **kwargs
-):
+    ligand_file: str, out_dir: str=None, include_geometry: bool=True, debug: bool=False, **kwargs
+) -> list[dict]:
     if not os.path.exists(ligand_file):
         raise RuntimeError(f"ligand file {ligand_file} not exists")
     if ligand_file.endswith(".sdf"):
@@ -105,7 +105,7 @@ def prepare_ligand(
     return prepared_jsons
 
 
-def prepare_ligand_from_sdf(sdf_path, debug=False, **kwargs):
+def prepare_ligand_from_sdf(sdf_path: str, debug: bool=False, **kwargs) -> pd.DataFrame:
     suppl = Chem.SDMolSupplier(sdf_path, removeHs=False)
     datas = []
     for i, rkmol in tqdm(enumerate(suppl)):
@@ -143,7 +143,7 @@ def prepare_ligand_from_sdf(sdf_path, debug=False, **kwargs):
     return df
 
 
-def prepare_ligand_from_pose(ligand_fpath, debug=False, **kwargs):
+def prepare_ligand_from_pose(ligand_fpath: str, debug=False, **kwargs) -> pd.DataFrame:
     df = pd.read_csv(ligand_fpath, index_col=False)
 
     assert "ligand" in df.columns, f"ligand column is missing in {ligand_fpath}"

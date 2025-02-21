@@ -37,7 +37,7 @@ def parse_pocket_config(pocket_config: str) -> dict:
     return config
 
 
-def write_pocket_config(pocket_center, box_size, out_fpath=None):
+def write_pocket_config(pocket_center: list[int] | tuple[int], box_size: list[int] | tuple[int], out_fpath: str | None = None) -> str:
     if out_fpath is None:
         out_fpath = os.path.join(kWorkDir, f"{my_random_string()}_pocket.config")
 
