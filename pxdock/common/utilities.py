@@ -30,7 +30,6 @@ from typing import Dict, Mapping, Tuple
 import jinja2
 import numpy as np
 import pandas as pd
-import torch
 from func_timeout import exceptions as func_timeout_exceptions
 from func_timeout import func_set_timeout
 from rdkit import Chem
@@ -43,16 +42,6 @@ logger = get_logger(__name__)
 def seed_everything(seed, deterministic=False):
     random.seed(seed)
     np.random.seed(seed)
-    torch.random.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    if deterministic:
-        torch.backends.cudnn.benchmark = False
-        # torch.backends.cudnn.deterministic=True applies to CUDA convolution operations, and nothing else.
-        torch.backends.cudnn.deterministic = True
-        # torch.use_deterministic_algorithms(True) affects all the normally-nondeterministic operations listed here https://pytorch.org/docs/stable/generated/torch.use_deterministic_algorithms.html?highlight=use_deterministic#torch.use_deterministic_algorithms
-        torch.use_deterministic_algorithms(True)
-        # https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
-        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 
 def convert_value_to_list(obj):
@@ -68,8 +57,6 @@ def convert_value_to_list(obj):
         return {str(key): convert_value_to_list(obj[key]) for key in obj}
     if isinstance(obj, np.ndarray):
         return convert_value_to_list(obj.tolist())
-    if isinstance(obj, torch.Tensor):
-        return convert_value_to_list(obj.cpu().tolist())
     return obj
 
 
@@ -81,26 +68,6 @@ def padding(lst, idx=0):
     else:
         return lst
 
-
-def convert_ffdata_to_tensor(ffdata):
-    for k in ffdata:
-        if isinstance(ffdata[k], Mapping):
-            ffdata[k] = convert_ffdata_to_tensor(ffdata[k])
-            continue
-
-        if isinstance(ffdata[k], str):
-            continue
-
-        if isinstance(ffdata[k], torch.Tensor):  # avoid abundant convertion
-            continue
-        if "group" in k:
-            ffdata[k] = torch.Tensor(padding(ffdata[k], idx=-1))
-        else:
-            ffdata[k] = torch.Tensor(padding(ffdata[k]))
-        if "idx" in k or "index" in k or k == "atomic_numbers":
-            ffdata[k] = ffdata[k].to(torch.long)
-
-    return ffdata
 
 
 def my_random_string(string_length=10):
@@ -180,14 +147,6 @@ def modify_molecule_weights(m):
             total_cut += 35.45 - atom.GetMass()
     return total_cut
 
-
-def custom_deepcopy(obj):
-    if torch.is_tensor(obj):
-        return obj.clone()
-    elif isinstance(obj, dict):
-        return {key: custom_deepcopy(value) for key, value in obj.items()}
-    else:
-        return copy.deepcopy(obj)
 
 
 def load_json(x):

@@ -28,8 +28,6 @@ from typing import List
 
 import MDAnalysis as mda
 import numpy as np
-import rdkit.Chem as Chem
-import torch
 from byteff.mol import Conformer, Molecule
 from rdkit import Chem
 from rdkit.Chem.rdchem import Mol
@@ -379,7 +377,7 @@ class PoseWriter:
 
     def set_ligand_pose(
         self,
-        xyz: [torch.Tensor, np.ndarray, List],  # [nposes, natoms, 3]
+        xyz: np.ndarray | list,  # [nposes, natoms, 3]
         confdata: list = None,  # [nposes]
     ):
         self.clear_ligand_pose()
@@ -388,15 +386,13 @@ class PoseWriter:
         assert len(xyz) == len(confdata)
         if isinstance(xyz, list):
             xyz = np.array(xyz)
-        elif isinstance(xyz, torch.Tensor):
-            xyz = xyz.detach().numpy()
         for xyz_i, confdata_i in zip(xyz, confdata):
             conformer = Conformer(xyz_i, self.ligand.atomic_numbers, confdata_i)
             self.ligand.append_conformers(conformer)
 
     def set_receptor_pose(
         self,
-        xyz: [torch.Tensor, np.ndarray, List],  # [nposes, natoms, 3]
+        xyz: np.ndarray | list,  # [nposes, natoms, 3]
         index: list = None,
     ):
         assert (
@@ -404,8 +400,6 @@ class PoseWriter:
         ), f"receptor is None since GRO_string is not given."
         if isinstance(xyz, list):
             xyz = np.array(xyz)
-        elif isinstance(xyz, torch.Tensor):
-            xyz = xyz.detach().numpy()
         if index is not None:
             xyz_all = self.receptor.atoms.positions
             assert len(xyz_all) > 0
@@ -414,14 +408,14 @@ class PoseWriter:
             xyz = xyz_all
         self.receptor.load_new(xyz)
 
-    def write_ligand(self, output_dir, fname, append=False):
+    def write_ligand(self, output_dir: str, fname: str, append: bool=False):
         if not fname.endswith(".sdf"):
             fname = fname + ".sdf"
         os.makedirs(output_dir, exist_ok=True)
         fpath = os.path.join(output_dir, fname)
         self.ligand.to_sdf(fpath, append=append)
 
-    def write_receptor(self, output_dir, fname):
+    def write_receptor(self, output_dir: str, fname: str):
         if not fname.endswith(".pdb"):
             fname = fname + ".pdb"
         os.makedirs(output_dir, exist_ok=True)
@@ -432,14 +426,14 @@ class PoseWriter:
             for ts in self.receptor.trajectory:
                 PDB.write(self.receptor.atoms)
 
-    def write(self, output_dir, fname):
+    def write(self, output_dir: str, fname: str):
         self.write_ligand(output_dir, f"ligand_{fname}")
         self.write_receptor(output_dir, f"receptor_{fname}")
 
 
 def write_ligand_to_sdf(
     mapped_smiles: str,
-    xyz: [torch.Tensor, np.ndarray, List],
+    xyz: np.ndarray | list,
     output_fpath: str,
     confdata: List[dict] = None,
     append=False,
@@ -448,7 +442,7 @@ def write_ligand_to_sdf(
         ligand_smiles_string=mapped_smiles,
         receptor_gro_string=None,
     )
-    if not isinstance(xyz, (torch.Tensor, np.ndarray)):
+    if not isinstance(xyz, np.ndarray):
         xyz = np.array(xyz)
     pw.set_ligand_pose(xyz, confdata)
     output_dir = os.path.dirname(os.path.abspath(output_fpath))
@@ -460,8 +454,8 @@ def write_ligand_to_sdf(
 
 def write_receptor_to_pdb(
     gro_string: str,
-    xyz: [torch.Tensor, np.ndarray, List],
-    index: [torch.Tensor, np.ndarray, List],
+    xyz: np.ndarray | list,
+    index: np.ndarray | list,
     output_fpath: str,
 ):
     pw = PoseWriter(ligand_smiles_string=None, receptor_gro_string=gro_string)

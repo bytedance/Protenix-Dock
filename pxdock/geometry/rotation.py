@@ -13,36 +13,34 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import torch
+import numpy as np
 
 
-def euler_rotation_matrix(
-    angles: torch.Tensor,
-):
+def euler_rotation_matrix(angles: np.ndarray) -> np.ndarray:
     """
     Calculate the rotation matrix from Euler angles.
     For the theory of Euler angles, see: https://en.wikipedia.org/wiki/Euler_angles
 
     Args:
-        angles: torch.tensor
+        angles: np.ndarray
             - Euler angles: alpha, beta, gamma
             - shape=[..., 3]
 
     Returns:
-        R: torch.tensor
+        R: np.ndarray
             - rotation matrix
             - shape=[..., 3, 3]
     """
 
     assert angles.shape[-1] == 3
 
-    sinx = torch.sin(angles)
-    cosx = torch.cos(angles)
+    sinx = np.sin(angles)
+    cosx = np.cos(angles)
 
     sa, sb, sg = sinx[..., 0], sinx[..., 1], sinx[..., 2]
     ca, cb, cg = cosx[..., 0], cosx[..., 1], cosx[..., 2]
 
-    R = torch.stack(
+    R = np.stack(
         [
             ca * cb,
             ca * sb * sg - sa * cg,
@@ -54,23 +52,23 @@ def euler_rotation_matrix(
             cb * sg,
             cb * cg,
         ],
-        dim=-1,
+        axis=-1,
     )  # shape=[..., 9]
 
     # reshape last dim [9] --> [3, 3]
-    R = R.view(*R.shape[:-1], 3, 3)
+    R = R.reshape(*R.shape[:-1], 3, 3)
 
     return R
 
 
-def rodrigues_rotation_matrix(u: torch.Tensor, theta: torch.Tensor):
+def rodrigues_rotation_matrix(u: np.ndarray, theta: np.ndarray) -> np.ndarray:
     """
     Calculate the rotation matrix from Rodrigues formula.
     For the theory of Redrigues formula, refer to https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
 
     Args:
-        u: torsion shaft, shape=[..., 3]
-        theta: torch.tensor, shape [..., 1] or [...]
+        u: np.ndarray, torsion shaft, shape=[..., 3]
+        theta: np.ndarray, shape [..., 1] or [...]
 
     Returns:
         R_matrix: shape [..., 3, 3]
@@ -81,25 +79,25 @@ def rodrigues_rotation_matrix(u: torch.Tensor, theta: torch.Tensor):
     x, y, z = u[..., 0], u[..., 1], u[..., 2]
 
     if len(theta.shape) > len(x.shape):
-        theta = theta.squeeze(dim=-1)
+        theta = theta.squeeze(axis=-1)
     assert theta.shape == x.shape
-    st = torch.sin(theta)
-    ct = torch.cos(theta)
+    st = np.sin(theta)
+    ct = np.cos(theta)
 
-    R = torch.stack(
+    R = np.stack(
         [
-            ct + torch.pow(x, 2) * (1 - ct),
+            ct + x**2 * (1 - ct),
             x * y * (1 - ct) - z * st,
             y * st + x * z * (1 - ct),
             z * st + x * y * (1 - ct),
-            ct + torch.pow(y, 2) * (1 - ct),
+            ct + y**2 * (1 - ct),
             -x * st + y * z * (1 - ct),
             -y * st + x * z * (1 - ct),
             x * st + y * z * (1 - ct),
-            ct + torch.pow(z, 2) * (1 - ct),
+            ct + z**2 * (1 - ct),
         ],
-        dim=-1,
+        axis=-1,
     )
-    R = R.view(*R.shape[:-1], 3, 3)
+    R = R.reshape(*R.shape[:-1], 3, 3)
 
     return R

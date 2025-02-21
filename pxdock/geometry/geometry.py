@@ -16,8 +16,7 @@
 from itertools import accumulate
 from typing import List
 
-import torch
-import torch.nn.functional as F
+import numpy as np
 
 from pxdock.common import get_logger
 from pxdock.geometry.rotation import (
@@ -106,21 +105,21 @@ class ReceptorGeometry(BaseGeometry):
             [len(data["rot_bond_order"]) for data in self.data.values()]
         )
 
-    def torsion_to_xyz(self, torsion: torch.Tensor, xyz0: torch.Tensor):
+    def torsion_to_xyz(self, torsion: np.ndarray, xyz0: np.ndarray):
         """
         transform flexible receptor residue torsion coordinates to xyz coordinates.
 
         Args:
-        - torsion (torch.Tensor): torsion angles changes.
-        - xyz0 (torch.Tensor): original xyz coordinates of the receptor.
+        - torsion (np.ndarray): torsion angles changes.
+        - xyz0 (np.ndarray): original xyz coordinates of the receptor.
         """
         if self.num_rotatable_bonds == 0:
-            return xyz0.clone().detach()
+            return xyz0.copy()
         xyz_out = []
 
         atoms = []
         for frag_size, data in self.data.items():
-            fragments = torch.LongTensor(data["fragments"])
+            fragments = np.array(data["fragments"]).astype(int)
             rot_bond_1, rot_bond_2, rot_bond_order = (
                 data["rot_bond_1"],
                 data["rot_bond_2"],
@@ -138,18 +137,18 @@ class ReceptorGeometry(BaseGeometry):
             theta = torsion[..., rot_bond_order]  # [..., num_fragments]
 
             u = rot_bond_xyz2 - rot_bond_xyz1
-            u = F.normalize(u, p=2, dim=-1).detach()
+            u = u / np.clip((u**2).sum(axis=-1), 1e-5, None)**0.5
 
             # rotation matrix
             R = rodrigues_rotation_matrix(u, theta)  # [..., num_fragments, 3, 3]
             # torsion
             out = (
-                torch.einsum(
+                np.einsum(
                     "...ij,...kj->...ki",
                     R,
-                    (xyz_frag - rot_bond_xyz1.unsqueeze(dim=-2)).detach(),
+                    (xyz_frag - rot_bond_xyz1.unsqueeze(axis=-2)),
                 )
-                + rot_bond_xyz1.unsqueeze(dim=-2).detach()
+                + rot_bond_xyz1.unsqueeze(axis=-2).detach()
             )  # [..., num_fragments, num_atoms_in_fragment, 3]
             out = out.reshape(
                 out.shape[:-3] + (len(atom_index), 3)
@@ -157,7 +156,7 @@ class ReceptorGeometry(BaseGeometry):
 
             xyz_out.append(out)
 
-        xyz_out = torch.cat(xyz_out, dim=-2)
+        xyz_out = np.concatenate(xyz_out, axis=-2)
         atom_index = sum(atoms, [])
         xyz = xyz0.clone().detach()
         xyz[..., atom_index, :] = xyz_out
@@ -191,12 +190,12 @@ class LigandGeometry(BaseGeometry):
         index_map = dict(zip(self.permute_index, list(range(self.num_atoms))))
         self.reverse_index = [index_map[i] for i in range(self.num_atoms)]
 
-    def permute_xyz(self, xyz: torch.Tensor, reverse: bool = False):
+    def permute_xyz(self, xyz: np.ndarray, reverse: bool = False):
         """
         Permute the coordinates of the atoms according to the corresponding fragment ordering.
 
         Args:
-        - xyz: torch.Tensor of shape [..., natom, 3], coordinates of ligand.
+        - xyz: np.ndarray of shape [..., natom, 3], coordinates of ligand.
         - reverse: bool, if True, permute the coordinates back to the original order.
         """
         n = xyz.shape[-2]
@@ -210,20 +209,20 @@ class LigandGeometry(BaseGeometry):
 
     def torsion6_to_xyz(
         self,
-        torsion: torch.Tensor,
-        translaton: torch.Tensor,
-        rotation: torch.Tensor,
-        xyz0: torch.Tensor,
+        torsion: np.ndarray,
+        translaton: np.ndarray,
+        rotation: np.ndarray,
+        xyz0: np.ndarray,
         rot_center: str = "first_atom",
     ):
         """
         transform ligand torsion6 coordinates to xyz coordinates.
 
         Args:
-        - torsion: torch.Tensor of shape [..., num_rbonds], torsion angles changes.
-        - translaton: torch.Tensor of shape [..., 3], translation vector changes.
-        - rotation: torch.Tensor of shape [..., 3], rotation angles changes.
-        - xyz0: torch.Tensor of shape [..., natom, 3], original coordinates of ligand.
+        - torsion: np.ndarray of shape [..., num_rbonds], torsion angles changes.
+        - translaton: np.ndarray of shape [..., 3], translation vector changes.
+        - rotation: np.ndarray of shape [..., 3], rotation angles changes.
+        - xyz0: np.ndarray of shape [..., natom, 3], original coordinates of ligand.
         - rot_center: str, optional, the center of rotation, can be "first_atom" or "geo_center".
         """
         xyz0_permuted = self.permute_xyz(xyz0)
@@ -235,21 +234,21 @@ class LigandGeometry(BaseGeometry):
                 ..., 0:1, :
             ]  # the first atom in the permuted xyz must belong to the root frame, and has the smallest atom index in the root frame
         elif rot_center == "geo_center":
-            rot_center = torch.unsqueeze(torch.mean(xyz0_permuted, dim=1), 1)
+            rot_center = np.mean(xyz0_permuted, axis=1, keepdims=True)
         else:
             rot_center = xyz0_permuted[
                 ..., 0:1, :
             ]  # the first atom in the permuted xyz must belong to the root frame, and has the smallest atom index in the root frame
         xyz_centered = xyz0_permuted - rot_center
-        xyz = torch.einsum("...ij,...kj->...ki", rot_matrix, xyz_centered)
+        xyz = np.einsum("...ij,...kj->...ki", rot_matrix, xyz_centered)
 
         ### (2) Transition ###
         if len(translaton.shape) < len(xyz.shape):
-            translaton = translaton.unsqueeze(dim=-2)
+            translaton = translaton.unsqueeze(axis=-2)
         xyz = xyz + rot_center + translaton
 
         ### (3) Torsion ###
-        xyz_fragments = list(torch.tensor_split(xyz, self.frag_split_index, dim=-2))
+        xyz_fragments = np.split(xyz, self.frag_split_index, axis=-2)
 
         # rotation matrix
         RotationMatrix = {}
@@ -278,23 +277,23 @@ class LigandGeometry(BaseGeometry):
                     )
                     u = atom_xyz0 - parent_xyz0
                     if R_parent is not None:
-                        u = torch.einsum("...ij,...j->...i", R_parent, u)
-                    u = F.normalize(u, p=2, dim=-1)
+                        u = np.einsum("...ij,...j->...i", R_parent, u)
+                    u = u / np.clip((u**2).sum(axis=-1), 1e-5, None)**0.5
 
                     # new rotation matrix
                     edge_order = edge_data["order"]
                     theta = torsion[..., edge_order]  # [...]
                     R = rodrigues_rotation_matrix(u, theta)
                     if R_parent is not None:
-                        R = torch.einsum("...ij,...jk", R, R_parent)
+                        R = np.einsum("...ij,...jk", R, R_parent)
                     RotationMatrix[i] = R
 
                     # perform torsion
-                    xyz_fragments[i] = torch.einsum(
+                    xyz_fragments[i] = np.einsum(
                         "...ij,...kj->...ki",
                         R,
-                        xyz_fragments[i] - parent_xyz0.unsqueeze(dim=-2),
-                    ) + parent_xyz[i].unsqueeze(dim=-2)
+                        xyz_fragments[i] - parent_xyz0.unsqueeze(axis=-2),
+                    ) + parent_xyz[i].unsqueeze(axis=-2)
 
                 # save location for its children
                 for child in children_list:
@@ -305,7 +304,7 @@ class LigandGeometry(BaseGeometry):
                         ..., self.fragments[i].index(atom), :
                     ]
 
-        xyz_rotated = torch.cat(xyz_fragments, dim=-2)
+        xyz_rotated = np.concatenate(xyz_fragments, axis=-2)
         # permute the index back
         return self.permute_xyz(xyz_rotated, reverse=True)
 
