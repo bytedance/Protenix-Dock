@@ -28,11 +28,11 @@ except ImportError:
 
 
 class PrepProt(object):
-    def __init__(self, pdb_file):
+    def __init__(self, pdb_file: str):
         self.prot = pdb_file
         self.prot_pqr = None
 
-    def del_water(self, output):  # optional
+    def del_water(self, output: str):  # optional
         if not os.path.exists(output):
             with open(self.prot) as f:
                 lines = [
@@ -45,8 +45,8 @@ class PrepProt(object):
                 f.write("".join(dry_lines))
         self.prot = output
 
-    def del_metal(self, output):
-        metals = [
+    def del_metal(self, output: str):
+        metals = set(
             "ZN",
             "CA",
             "HG",
@@ -68,7 +68,7 @@ class PrepProt(object):
             "IN",
             "SE",
             "CD",
-        ]
+        )
 
         if not os.path.exists(output):
             with open(self.prot) as f:
@@ -78,22 +78,13 @@ class PrepProt(object):
                     if l.startswith("ATOM") or l.startswith("HETATM")
                 ]
 
-                non_metal_lines = []
-                for l in lines:
-                    ind = 0
-                    while ind < len(metals):
-                        if l[17:20].strip() == metals[ind]:
-                            break
-                        ind += 1
-                    if ind == len(metals):
-                        non_metal_lines.append(l)
-
+            non_metal_lines = [l for l in lines if l[17:20].strip() not in metals]
             with open(output, "w") as f:
                 f.writelines(non_metal_lines)
 
         self.prot = output
 
-    def addH(self, prot_pqr, prot_pdb):  # call pdb2pqr
+    def addH(self, prot_pqr: str, prot_pdb: str):  # call pdb2pqr
         self.prot_pqr = prot_pqr
         self.prot_pdb = prot_pdb
         if not os.path.exists(prot_pqr):
@@ -108,7 +99,7 @@ class PrepProt(object):
                 ]
             ).communicate()
 
-    def get_pdbqt(self, prot_pdbqt):
+    def get_pdbqt(self, prot_pdbqt: str):
         if self.prot_pqr is None:
             self.prot_pqr = self.prot
         if not os.path.exists(prot_pdbqt):
@@ -130,7 +121,7 @@ class PrepProt(object):
     #         self.box_size = [round((max(xs) - min(xs)) + buf, 3), round((max(ys) - min(ys)) + buf, 3),
     #                          round((max(zs) - min(zs)) + buf, 3)]
 
-    def get_box(self, ref_path, buf=0):
+    def get_box(self, ref_path: str, buf=0):
         # Find the pocket according to the ref ligand
         if ref_path.endswith(".pdb") or ref_path.endswith(".pdbqt"):
             with open(ref_path, "r") as f:
@@ -140,19 +131,12 @@ class PrepProt(object):
                     if l.startswith("ATOM") or l.startswith("HETATM")
                 ]
 
-                xs = [float(l[30:38]) for l in lines]
-                ys = [float(l[38:46]) for l in lines]
-                zs = [float(l[46:54]) for l in lines]
-                self.pocket_center = [
-                    round((max(xs) + min(xs)) / 2, 3),
-                    round((max(ys) + min(ys)) / 2, 3),
-                    round((max(zs) + min(zs)) / 2, 3),
-                ]
-                self.box_size = [
-                    round((max(xs) - min(xs)) + buf, 3),
-                    round((max(ys) - min(ys)) + buf, 3),
-                    round((max(zs) - min(zs)) + buf, 3),
-                ]
+            xs = [float(l[30:38]) for l in lines]
+            ys = [float(l[38:46]) for l in lines]
+            zs = [float(l[46:54]) for l in lines]
+
+            coords = np.stack((xs, ys, zs), axis=-1)
+
         elif (
             ref_path.endswith(".sdf")
             or ref_path.endswith(".mol")
@@ -163,9 +147,10 @@ class PrepProt(object):
             else:
                 mol = Chem.MolFromMolFile(ref_path, removeHs=False)
             coords = mol.GetConformers()[0].GetPositions()
-            self.pocket_center = list(
-                np.round((np.max(coords, axis=0) + np.min(coords, axis=0)) / 2, 3)
-            )
-            self.box_size = list(
-                np.round((np.max(coords, axis=0) - np.min(coords, axis=0)) + buf, 3)
-            )
+
+        self.pocket_center = tuple(
+            np.round((np.max(coords, axis=0) + np.min(coords, axis=0)) / 2, 3).tolist()
+        )
+        self.box_size = tuple(
+            np.round((np.max(coords, axis=0) - np.min(coords, axis=0)) + buf, 3).tolist()
+        )

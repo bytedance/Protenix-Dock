@@ -20,7 +20,7 @@ import numpy as np
 from rdkit import Chem
 
 
-def read_coords_from_sdf_file(sdf_path):
+def read_coords_from_sdf_file(sdf_path: str) -> np.ndarray:
     file = open(sdf_path, mode="r")
     content = file.read()
     file.close()
@@ -33,7 +33,7 @@ def read_coords_from_sdf_file(sdf_path):
     return np.array(datasplit)
 
 
-def compute_pocket_box(file_name, buffer=5):
+def compute_pocket_box(file_name: str, buffer=5):
     # Find the pocket according to the ref ligand
     if file_name.endswith(".pdb") or file_name.endswith(".pdbqt"):
         with open(file_name, "r") as f:
@@ -45,16 +45,9 @@ def compute_pocket_box(file_name, buffer=5):
             xs = [float(l[30:38]) for l in lines]
             ys = [float(l[38:46]) for l in lines]
             zs = [float(l[46:54]) for l in lines]
-            pocket_center = [
-                round((max(xs) + min(xs)) / 2, 3),
-                round((max(ys) + min(ys)) / 2, 3),
-                round((max(zs) + min(zs)) / 2, 3),
-            ]
-            box_size = [
-                round((max(xs) - min(xs)) + buffer, 3),
-                round((max(ys) - min(ys)) + buffer, 3),
-                round((max(zs) - min(zs)) + buffer, 3),
-            ]
+
+            coords = np.stack((xs, ys, zs), axis=-1)
+
     elif (
         file_name.endswith(".sdf")
         or file_name.endswith(".mol")
@@ -70,32 +63,28 @@ def compute_pocket_box(file_name, buffer=5):
                 coords = mol.GetConformers()[0].GetPositions()
             except:
                 coords = read_coords_from_sdf_file(file_name)
-        pocket_center = list(
-            np.round((np.max(coords, axis=0) + np.min(coords, axis=0)) / 2, 3)
-        )
-        pocket_center = [item.item() for item in pocket_center]
+    else:
+        raise NotImplementedError("Ligand format not implemented")
 
-        box_size = list(
-            np.round((np.max(coords, axis=0) - np.min(coords, axis=0)) + buffer, 3)
-        )
-        box_size = [item.item() for item in box_size]
+    pocket_center = np.round((np.max(coords, axis=0) + np.min(coords, axis=0)) / 2, 3).tolist()
+    box_size = np.round((np.max(coords, axis=0) - np.min(coords, axis=0)) + buffer, 3).tolist()
 
     return pocket_center, box_size
 
 
-def list_pdbbind_dir(path):
+def list_pdbbind_dir(path: str):
     file_lists = os.listdir(path)
     file_lists = [x for x in file_lists if len(x) == 4 and x[0].isdigit()]
     return file_lists
 
 
-def write_pocket_conf(file, center, pocket):
+def write_pocket_conf(file: str, center: list, pocket: list):
     with open(file, "w") as f:
         f.writelines("center:" + ",".join(center) + "\n")
         f.writelines("box:" + ",".join(pocket) + "\n")
 
 
-def read_pocket_conf(file):
+def read_pocket_conf(file: str):
     with open(file, "r") as f:
         lines = f.readlines()
         center = list(map(float, lines[0].strip("center:").split(",")))

@@ -16,7 +16,6 @@
 import json
 import os
 import unittest
-from typing import List
 
 from pxdock.common import get_logger, my_random_string
 
@@ -35,7 +34,7 @@ class RMSDTest(unittest.TestCase):
     def calculate_pose_rmsd(
         self,
         mapped_smiles: str,
-        xyz: List[List[float]],
+        xyz: list[list[float]],
         local_ref_file: str,
     ) -> float:
         from pxdock.common.rmsd_calculator import (

@@ -205,7 +205,7 @@ class LigandParser:
         self.bonds = self.rkmol.GetBonds()
         self.num_bonds = len(self.bonds)
         self.bond_index = [
-            sorted([int(bond.GetBeginAtomIdx()), int(bond.GetEndAtomIdx())])
+            sorted((int(bond.GetBeginAtomIdx()), int(bond.GetEndAtomIdx())))
             for bond in self.bonds
         ]
 

@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 
 class PrepProt_py39(PrepProt):
-    def get_pdbqt(self, prot_pdbqt):
+    def get_pdbqt(self, prot_pdbqt: str):
         if self.prot_pqr is None:
             self.prot_pqr = self.prot
         if not os.path.exists(prot_pdbqt):
@@ -43,7 +43,7 @@ class PrepProt_py39(PrepProt):
                 f"pdbqt path: {prot_pdbqt} does not exists! Some thing must be wrong during the preparation. Please check the log."
             )
 
-    def removeH(self, prot_pdb_noH):
+    def removeH(self, prot_pdb_noH: str):
         with open(self.prot, "r") as infile:
             with open(prot_pdb_noH, "w") as outfile:
                 for line in infile:
@@ -54,7 +54,7 @@ class PrepProt_py39(PrepProt):
         self.prot = prot_pdb_noH
 
 
-def prepare_receptor_pdbqt(receptor_pdb, save_dir, del_metal=True):
+def prepare_receptor_pdbqt(receptor_pdb: str, save_dir: str, del_metal: bool=True):
 
     pdb_name = os.path.basename(receptor_pdb)
     assert pdb_name.endswith(".pdb")

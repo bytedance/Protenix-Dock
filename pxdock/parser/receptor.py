@@ -458,13 +458,9 @@ class ReceptorParser:
 
         # update pair between old and new
         cofactor_atomidx = sorted(
-            list(
-                set(
-                    [
-                        atom[0] + receptor_atom_num
-                        for atom in cofactor_data["ffdata"]["FF_vdW_atomidx"]
-                    ]
-                )
+            set(
+                atom[0] + receptor_atom_num
+                for atom in cofactor_data["ffdata"]["FF_vdW_atomidx"]
             )
         )
         new_nobond_pairs = [
@@ -484,7 +480,7 @@ class ReceptorParser:
             self.ffdata[update_key].extend(new_data)
 
         # update xyz
-        self.xyz = np.concatenate([self.xyz, cofactor_data["xyz"][0]], axis=0)
+        self.xyz = np.concatenate((self.xyz, cofactor_data["xyz"][0]), axis=0)
 
         # update bond_index
         shift_num = receptor_atom_num

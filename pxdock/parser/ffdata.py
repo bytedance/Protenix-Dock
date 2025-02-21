@@ -23,6 +23,7 @@ from parmed.amber import AmberParm
 from pxdock.common import get_logger
 from pxdock.common.amber_forcefield import (
     AMBERFF_ATOMTYPES,
+    AMBERFF_ATOMTYPES2idx,
     FORCEFIELD,
     FORCEFIELD_WATER_ION,
 )
@@ -135,7 +136,7 @@ def pdb_to_parm(working_dir, pdbfile, forcefield="FF14SB"):
     return parm
 
 
-def parm_to_ffdata(parm: AmberParm) -> dict[str, list]:
+def parm_to_ffdata(parm: AmberParm) -> tuple[dict[str, list], list[tuple[float]]]:
     """
     Parse required forcefield parameters from an AmberParm object.
     Only restricted types of forcefield terms are allowed.
@@ -145,7 +146,7 @@ def parm_to_ffdata(parm: AmberParm) -> dict[str, list]:
 
     Returns:
         dict: A dictionary containing forcefield data.
-        list: The xyz coordinates of the atoms.
+        list: The xyz coordinates of the atoms. (N, 3)
     """
     ffdata = {}
     assert not parm.adjusts
@@ -159,7 +160,7 @@ def parm_to_ffdata(parm: AmberParm) -> dict[str, list]:
     ffdata["FF_vdW_epsilon"] = [float(atom.epsilon) for atom in parm.atoms]
     ffdata["FF_vdW_atomidx"] = [[atom.idx] for atom in parm.atoms]
     ffdata["FF_vdW_paraidx"] = [
-        AMBERFF_ATOMTYPES.index(atom.atom_type.name) + 1000 for atom in parm.atoms
+        AMBERFF_ATOMTYPES2idx[atom.atom_type.name] + 1000 for atom in parm.atoms
     ]
     check_vdw_paraidx(
         ffdata["FF_vdW_sigma"], ffdata["FF_vdW_epsilon"], ffdata["FF_vdW_paraidx"]
@@ -172,7 +173,7 @@ def parm_to_ffdata(parm: AmberParm) -> dict[str, list]:
     for key in ALL_FF_KEYS:
         assert key in ffdata, key
 
-    xyz = [[atom.xx, atom.xy, atom.xz] for atom in parm.atoms]
+    xyz = [(atom.xx, atom.xy, atom.xz) for atom in parm.atoms]
     return ffdata, xyz
 
 
@@ -196,12 +197,12 @@ def calc_nonbonded_atomidx(
         "FF_ProperTorsions_atomidx",
     ]:
         assert key in ffdata
-    nonbonded12 = set([tuple(sorted([p[0], p[1]])) for p in ffdata["FF_Bonds_atomidx"]])
+    nonbonded12 = set(tuple(sorted([p[0], p[1]])) for p in ffdata["FF_Bonds_atomidx"])
     nonbonded13 = set(
-        [tuple(sorted([p[0], p[2]])) for p in ffdata["FF_Angles_atomidx"]]
+        tuple(sorted((p[0], p[2]))) for p in ffdata["FF_Angles_atomidx"]
     )
     nonbonded14 = (
-        set([tuple(sorted([p[0], p[3]])) for p in ffdata["FF_ProperTorsions_atomidx"]])
+        set(tuple(sorted((p[0], p[3]))) for p in ffdata["FF_ProperTorsions_atomidx"])
         - nonbonded12
         - nonbonded13
     )
@@ -278,7 +279,7 @@ def parm_to_angle_params(parm: AmberParm) -> dict[str, list]:
     parm.angles.sort(key=lambda x: x.atom1.idx)
 
     ffdata["FF_Angles_atomidx"] = [
-        [angle.atom1.idx, angle.atom2.idx, angle.atom3.idx] for angle in parm.angles
+        (angle.atom1.idx, angle.atom2.idx, angle.atom3.idx) for angle in parm.angles
     ]
     ffdata["FF_Angles_k"] = [angle.type.k * 2.0 for angle in parm.angles]
     ffdata["FF_Angles_angle"] = [angle.type.theteq for angle in parm.angles]
@@ -338,12 +339,12 @@ def parm_to_torsion_params(parm: AmberParm, type: str = "Proper") -> dict[str, l
                 dihedral.atom4.idx,
             )
             ffdata[f"FF_{type}Torsions_atomidx"].append(
-                [
+                (
                     dihedral.atom1.idx,
                     dihedral.atom2.idx,
                     dihedral.atom3.idx,
                     dihedral.atom4.idx,
-                ]
+                )
             )
             ffdata[f"FF_{type}Torsions_periodicity"].append([dihedral.type.per])
             ffdata[f"FF_{type}Torsions_phase"].append([dihedral.type.phase])
