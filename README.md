@@ -103,6 +103,22 @@ python3 test_protenix_dock.py
 python3 test_rmsd.py
 ```
 
+
+## Contribution
+
+Please check [Contributing](CONTRIBUTING.md) for more details. If you encounter problems using Protenix—Dock, feel free to create an issue! We also welcome pull requests from the community.
+
+## Code of Conduct
+
+Please check [Code of Conduct](CODE_OF_CONDUCT.md) for more details.
+
+## Security
+
+If you discover a potential security issue in this project, or think you may
+have discovered a security issue, we ask that you notify Bytedance Security via our [security center](https://security.bytedance.com/src) or [vulnerability reporting email](sec@bytedance.com).
+
+Please do **not** create a public GitHub issue.
+
 ## License 
 
 The Protenix-Dock project is made available under the [GPLv3 License](./LICENSE)
