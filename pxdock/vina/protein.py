@@ -46,7 +46,7 @@ class PrepProt(object):
         self.prot = output
 
     def del_metal(self, output: str):
-        metals = [
+        metals = set(
             "ZN",
             "CA",
             "HG",
@@ -68,7 +68,7 @@ class PrepProt(object):
             "IN",
             "SE",
             "CD",
-        ]
+        )
 
         if not os.path.exists(output):
             with open(self.prot) as f:
@@ -78,17 +78,7 @@ class PrepProt(object):
                     if l.startswith("ATOM") or l.startswith("HETATM")
                 ]
 
-                non_metal_lines = []
-                for l in lines:
-                    # TODO: change by: metals:=set; if not l[17:20].strip() in metals: append
-                    ind = 0
-                    while ind < len(metals):
-                        if l[17:20].strip() == metals[ind]:
-                            break
-                        ind += 1
-                    if ind == len(metals):
-                        non_metal_lines.append(l)
-
+            non_metal_lines = [l for l in lines if l[17:20].strip() not in metals]
             with open(output, "w") as f:
                 f.writelines(non_metal_lines)
 
@@ -158,5 +148,9 @@ class PrepProt(object):
                 mol = Chem.MolFromMolFile(ref_path, removeHs=False)
             coords = mol.GetConformers()[0].GetPositions()
 
-        self.pocket_center = np.round((np.max(coords, axis=0) + np.min(coords, axis=0)) / 2, 3).tolist()
-        self.box_size = np.round((np.max(coords, axis=0) - np.min(coords, axis=0)) + buf, 3).tolist()
+        self.pocket_center = tuple(
+            np.round((np.max(coords, axis=0) + np.min(coords, axis=0)) / 2, 3).tolist()
+        )
+        self.box_size = tuple(
+            np.round((np.max(coords, axis=0) - np.min(coords, axis=0)) + buf, 3).tolist()
+        )

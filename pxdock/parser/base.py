@@ -124,7 +124,7 @@ class MolBase:
 
     @staticmethod
     def find_hyda(rkmol, all_atoms) -> list:
-        """Hydrophobic acceptors: carbon atoms w/ only Cs and/or Hs as direct neighbors."""
+        """Hydrophobic acceptors: carbon atoms w/ only C and/or H as direct neighbors."""
         atom_set = []
         data = namedtuple("hydrophobic", "atom idx")
         hydrophobic_smarts = (
