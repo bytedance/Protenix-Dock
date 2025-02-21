@@ -72,6 +72,21 @@ popd
 
 #### Run with Python (recommended):
 
+#### Run with Python (recommended):
+
+* Autobox (easy benchmark)
+```python
+from pxdock import ProtenixDock
+receptor_pdb = "path/to/receptor.pdb"
+true_ligand_sdf = "path/to/true_ligand.sdf"
+ligand_sdf = "path/to/ligand.sdf"
+
+dock_instance = ProtenixDock(receptor_pdb)
+dock_instance.autobox(true_ligand_sdf)
+out_dir = dock_instance.run_docking(ligand_sdf)
+```
+
+* Manual input: 
 ```python
 from pxdock import ProtenixDock
 receptor_pdb = "path/to/receptor.pdb"
@@ -84,6 +99,8 @@ dock_instance.set_box(box_center, box_size)
 
 # Optional: you can generate cache maps for receptor, and then you can load it for next docking.
 # out_dir = dock_instance.generate_cache_maps(spacing=0.5)
+# in next run: 
+# dock_engine.load_cache_maps(out_dir)
 
 # the docking_res_files is in json format.
 docking_res_files = dock_instance.run_docking(ligand_sdf)

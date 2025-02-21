@@ -23,6 +23,7 @@ from pxdock.dock.utils import kScoreConfigFile
 from pxdock.engine import ReusableEngine
 from pxdock.pipeline.prepare_ligand import prepare_ligand
 from pxdock.pipeline.prepare_receptor import prepare_receptor
+from pxdock.pipeline.get_pocket_info import compute_pocket_box
 from pxdock.vina.prepare_receptor import prepare_receptor_pdbqt
 from pxdock.vina.vina_docking import run_vina_docking
 
@@ -63,6 +64,10 @@ class ProtenixDock(object):
         self._receptor_pdbqt = prepare_receptor_pdbqt(self._receptor_pdb, kWorkDir)
         self._engine = ReusableEngine(receptor_json, self._sf_file, self._nthreads)
         self._engine.set_box(*self.pocket_center, *self.box_size)
+
+    def autobox(self, ligand_path: str, buffer: float = 5.0):
+        box_center, box_size = compute_pocket_box(ligand_path, buffer=buffer)
+        self.set_box(box_center, box_size)
 
     def generate_cache_maps(
         self,
