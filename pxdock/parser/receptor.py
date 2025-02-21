@@ -21,7 +21,6 @@ from io import StringIO
 
 import MDAnalysis as mda
 import numpy as np
-import torch
 
 from pxdock.common import get_logger, kWorkDir, my_random_string
 from pxdock.common.constants import ELEMENTS_TO_ATOMIC_NUMBERS
@@ -453,7 +452,7 @@ class ReceptorParser:
         ), f"atomidx keys' number error : {len(update_keys)} v.s. 18"
         for update_key in update_keys:
             shift_num = receptor_atom_num
-            new_data = torch.tensor(cofactor_data["ffdata"][update_key]) + shift_num
+            new_data = np.arrray(cofactor_data["ffdata"][update_key]) + shift_num
             self.ffdata[update_key].extend(new_data.tolist())
 
         # update pair between old and new
@@ -488,7 +487,7 @@ class ReceptorParser:
 
         # update bond_index
         shift_num = receptor_atom_num
-        new_bond_index = torch.tensor(cofactor_data["bond_index"]) + shift_num
+        new_bond_index = np.array(cofactor_data["bond_index"]) + shift_num
         self.bond_index.extend(new_bond_index.tolist())
 
         # update is_rotatable
