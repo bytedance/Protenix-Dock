@@ -51,13 +51,14 @@ class CMakeBuild(build_ext):
 
     def copy_cmake_output(self, target_dir):
         dst_dir = os.path.join(target_dir, package_name)
-        src_dir = os.path.join(target_dir, "lib")
-        if os.path.exists(src_dir):
-            for filename in os.listdir(src_dir):
-                full_file_name = os.path.join(src_dir, filename)
-                if os.path.isfile(full_file_name):
-                    self.copy_file(full_file_name, dst_dir)
-            shutil.rmtree(src_dir)
+        for name in ("lib", "lib64"):
+            src_dir = os.path.join(target_dir, "lib")
+            if os.path.exists(src_dir):
+                for filename in os.listdir(src_dir):
+                    full_file_name = os.path.join(src_dir, filename)
+                    if os.path.isfile(full_file_name):
+                        self.copy_file(full_file_name, dst_dir)
+                shutil.rmtree(src_dir)
 
 
 class CMakeExtension(Extension):
