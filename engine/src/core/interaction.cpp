@@ -20,8 +20,6 @@
 #include "bytedock/core/constant.h"
 #include "bytedock/core/pair.h"
 
-#include <functional>
-
 namespace bytedock {
 
 param_t harmonic_bond_interaction::put_gradients(const molecule_pose& mol_xyz,
@@ -116,53 +114,40 @@ param_t fourier_dihedral_interaction::put_gradients(
     return energy;
 }
 
-const lj_vdw* get_ligand_vdw_param(const index_t idx, const force_field_params& ffp) {
-    return kVdwTypeDatabase + ffp.vdw_types[idx];
-}
-
-const lj_vdw* get_receptor_vdw_param(const index_t idx, const force_field_params& ffp) {
-    return ffp.vdw_params.data() + idx;
-}
-
 param_t self_nonbonded_interactions::put_gradients(
     const molecule_pose& mol_xyz,
     const force_field_params& mol_ffdata,
     molecule_pose& xyz_gradient
 ) {
-    param_t e1 = 0., e2 = 0.;
+    if (!mol_ffdata.precalculated) throw std::runtime_error(
+        "Please call precalculate_intra_nonbonded_params(...) on ffdata first!"
+    );
+
+    // Calculate 1-4 pairs
+    param_t e1 = 0_r, e2 = 0_r;
     index_t ii, jj;
-    param_t r_ij[3], distance;
-    std::function<
-        const lj_vdw*(const index_t, const force_field_params&)
-    > get_vdw_param = mol_ffdata.vdw_types.size() > 0
-                    ? get_ligand_vdw_param : get_receptor_vdw_param;
+    param_t r_ij[3], ir;
     for (auto& item : mol_ffdata.pairs) {
         ii = item.ids[0];
         jj = item.ids[1];
         minus_3d(mol_xyz[jj].xyz, mol_xyz[ii].xyz, r_ij);  // i->j
-        distance = get_norm_3d(r_ij);
-        e1 += calculate_coul_pair(
-            mol_ffdata.partial_charges[ii], mol_ffdata.partial_charges[jj],
-            r_ij, distance, coul14_scale_, xyz_gradient[ii], xyz_gradient[jj]
-        );
-        e2 += calculate_vdw_pair(
-            *get_vdw_param(ii, mol_ffdata), *get_vdw_param(jj, mol_ffdata),
-            r_ij, distance, vdw14_scale_, xyz_gradient[ii], xyz_gradient[jj]
-        );
+        ir = safe_divide(1_r, get_norm_3d(r_ij));
+        e1 += calculate_coul_pair(item.qq, r_ij, ir, coul14_scale_,
+                                  xyz_gradient[ii], xyz_gradient[jj]);
+        e2 += calculate_vdw_pair(item.c6, item.c12, r_ij, ir, vdw14_scale_,
+                                 xyz_gradient[ii], xyz_gradient[jj]);
     }
+
+    // Calculate normal pairs
     for (auto& item : mol_ffdata.others) {
         ii = item.ids[0];
         jj = item.ids[1];
         minus_3d(mol_xyz[jj].xyz, mol_xyz[ii].xyz, r_ij);  // i->j
-        distance = get_norm_3d(r_ij);
-        e1 += calculate_coul_pair(
-            mol_ffdata.partial_charges[ii], mol_ffdata.partial_charges[jj],
-            r_ij, distance, 1., xyz_gradient[ii], xyz_gradient[jj]
-        );
-        e2 += calculate_vdw_pair(
-            *get_vdw_param(ii, mol_ffdata), *get_vdw_param(jj, mol_ffdata),
-            r_ij, distance, 1., xyz_gradient[ii], xyz_gradient[jj]
-        );
+        ir = safe_divide(1_r, get_norm_3d(r_ij));
+        e1 += calculate_coul_pair(item.qq, r_ij, ir, 1_r,
+                                  xyz_gradient[ii], xyz_gradient[jj]);
+        e2 += calculate_vdw_pair(item.c6, item.c12, r_ij, ir, 1_r,
+                                 xyz_gradient[ii], xyz_gradient[jj]);
     }
     return e1 + e2;
 }
