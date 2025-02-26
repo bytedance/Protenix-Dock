@@ -83,7 +83,10 @@ dock_instance = ProtenixDock(receptor_pdb)
 dock_instance.set_box(box_center, box_size)
 
 # Optional: you can generate cache maps for receptor, and then you can load it for next docking.
-# out_dir = dock_instance.generate_cache_maps(spacing=0.5)
+# In our tests, setting this parameter to 0.175 can achieve a balance between effect and performance.
+# out_dir = dock_instance.generate_cache_maps(spacing=0.175)
+# and in next run:
+# dock_instance.load_cache_maps(out_dir)
 
 # the docking_res_files is in json format.
 docking_res_files = dock_instance.run_docking(ligand_sdf)
@@ -92,6 +95,7 @@ docking_res_files = dock_instance.run_docking(ligand_sdf)
 ### Run tests
 
 ```bash
+# In these tests, we set the spacing to 0.5 in order to quickly complete the functional test.
 cd test
 # performing preare ligand, receptor and docking separately.
 python3 test_data_prepare.py

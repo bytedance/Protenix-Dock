@@ -60,7 +60,6 @@ class ProtenixDock(object):
         )
         if not receptor_json:
             raise RuntimeError(f"prepare_receptor failed {self._receptor_pdb}")
-        self._receptor_pdbqt = prepare_receptor_pdbqt(self._receptor_pdb, kWorkDir)
         self._engine = ReusableEngine(receptor_json, self._sf_file, self._nthreads)
         self._engine.set_box(*self.pocket_center, *self.box_size)
 
@@ -163,6 +162,7 @@ class ProtenixDock(object):
             "search_depth": 0,
             "energy_range": 1000,
         }
+        self._receptor_pdbqt = prepare_receptor_pdbqt(self._receptor_pdb, kWorkDir)
         tmp_csv_path = os.path.join(kWorkDir, f"{my_random_string()}_vina_docking.csv")
         _ = run_vina_docking(
             input_sdf_path=ligand_sdf,
