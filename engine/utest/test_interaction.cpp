@@ -169,7 +169,7 @@ TEST(IntraMolecularTest, SelfNonbonded) {
         {10.482, 24.527, 5.659},
         {10.255, 23.716, 6.568},
     };
-    molecule_pose xyz_gradient(mol_xyz.size(), {0., 0., 0.});
+    molecule_pose xyz_gradient(mol_xyz.size());  // Zero initialization in default
 
     force_field_params mol_ffdata;
     mol_ffdata.pairs = {  // ids[2]
@@ -203,6 +203,7 @@ TEST(IntraMolecularTest, SelfNonbonded) {
         {3.4806, 0.0869},
         {3.0398, 0.2102},
     };
+    precalculate_intra_nonbonded_params(mol_ffdata, false);
 
     self_nonbonded_interactions sni;
     double energy = sni.put_gradients(mol_xyz, mol_ffdata, xyz_gradient);

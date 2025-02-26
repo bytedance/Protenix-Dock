@@ -66,6 +66,13 @@ struct lj_vdw {
     param_t epsilon;
 };
 
+struct nonbonded_atom_pair {
+    index_t ids[2];
+    param_t c6;
+    param_t c12;
+    param_t qq;  // qi * qj
+};
+
 struct pi_ring {
     index_t ids[6];
     index_t size;
@@ -87,8 +94,8 @@ struct force_field_params {
     std::vector<harmonic_angle> angles;
     std::vector<fourier_dihedral> impropers;
     std::vector<fourier_dihedral> propers;
-    std::vector<atom_pair> pairs;  // 1-4 pairs
-    std::vector<atom_pair> others;
+    std::vector<nonbonded_atom_pair> pairs;  // 1-4 pairs
+    std::vector<nonbonded_atom_pair> others;
     std::vector<index_t> vdw_types;
     std::vector<lj_vdw> vdw_params;
     std::vector<param_t> partial_charges;
@@ -105,7 +112,8 @@ struct force_field_params {
     std::vector<atom_pair> rotatable_bonds;
     std::vector<atom_pair> all_bonds;  // `bond_index` is superset `bonds` in protein
     std::vector<index_t> atomic_numbers;
-    param_t molecular_weight;
+    param_t molecular_weight = 0_r;
+    bool precalculated = false;  // For intra-molecular terms
 };
 
 struct atom_position {

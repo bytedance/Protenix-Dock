@@ -1,4 +1,4 @@
-byteff @ git+https://github.com/bytedance/byteff.git@9f67b6ae6b21f093964d9997ecc04499cc084484
+byteff @ git+https://github.com/bytedance/byteff.git@90ef54a7c38e58f162adc23f3e8f457aaf922d46
 AutoDockTools_py3 @ git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3@da0c87cac6a8a5b4cb6d1670f48e05d63f008dbf
 pandas>=1.3.5
 tos>=2.6.0

@@ -22,6 +22,33 @@
 
 namespace bytedock {
 
+inline void precalculate_coul_pair(const std::vector<param_t>& charges,
+                                   nonbonded_atom_pair& item) {
+    item.qq = charges[item.ids[0]] * charges[item.ids[1]];
+}
+
+inline void precalculate_vdw_pair(const lj_vdw* type_i, const lj_vdw* type_j,
+                                  nonbonded_atom_pair& item) {
+    param_t sigma6 = std::pow((type_i->sigma + type_j->sigma) * 0.5_r, 6_r);
+    item.c6 = 4_r * std::sqrt(type_i->epsilon * type_j->epsilon) * sigma6;
+    item.c12 = item.c6 * sigma6;
+}
+
+inline param_t calculate_coul_pair(const param_t qq,
+                                   const param_t* r_ij,
+                                   const param_t ir,  // 1/distance
+                                   const param_t scale,
+                                   atom_position& grad_i,
+                                   atom_position& grad_j) {
+    param_t qqk = qq * kCoulombFactor * scale;
+    param_t de_dr_r = -qqk * MATH_CUBE_SCALAR(ir);
+    param_t grad[3];
+    scale_3d(r_ij, de_dr_r, grad);
+    minus_inplace_3d(grad_i.xyz, grad);
+    add_inplace_3d(grad_j.xyz, grad);
+    return qqk * ir;
+}
+
 inline param_t calculate_coul_pair(const param_t qi,
                                    const param_t qj,
                                    const param_t* r_ij,
@@ -35,8 +62,26 @@ inline param_t calculate_coul_pair(const param_t qi,
     scale_3d(r_ij, de_dr_r, grad);
     minus_inplace_3d(grad_i.xyz, grad);
     add_inplace_3d(grad_j.xyz, grad);
-    param_t energy = safe_divide(qi_qj, distance) * kCoulombFactor;
-    return energy;
+    return safe_divide(qi_qj, distance) * kCoulombFactor;
+}
+
+inline param_t calculate_vdw_pair(const param_t c6,
+                                  const param_t c12,
+                                  const param_t* r_ij,
+                                  const param_t ir,  // 1/distance
+                                  const param_t scale,
+                                  atom_position& grad_i,
+                                  atom_position& grad_j) {
+    param_t ir2 = MATH_SQUARE_SCALAR(ir);
+    param_t ir6 = MATH_CUBE_SCALAR(ir2);
+    param_t u6 = c6 * ir6 * scale;
+    param_t u12 = c12 * MATH_SQUARE_SCALAR(ir6) * scale;
+    param_t de_dr_r = (-12_r * u12 + 6_r * u6) * ir2;
+    param_t grad[3];
+    scale_3d(r_ij, de_dr_r, grad);
+    minus_inplace_3d(grad_i.xyz, grad);
+    add_inplace_3d(grad_j.xyz, grad);
+    return u12 - u6;
 }
 
 inline param_t calculate_vdw_pair(const lj_vdw& type_i,

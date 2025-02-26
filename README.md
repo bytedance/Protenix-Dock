@@ -98,7 +98,8 @@ dock_instance = ProtenixDock(receptor_pdb)
 dock_instance.set_box(box_center, box_size)
 
 # Optional: you can generate cache maps for receptor, and then you can load it for next docking.
-# out_dir = dock_instance.generate_cache_maps(spacing=0.5)
+# In our tests, setting this parameter to 0.175 can achieve a balance between effect and performance.
+# out_dir = dock_instance.generate_cache_maps(spacing=0.175)
 # in next run: 
 # dock_engine.load_cache_maps(out_dir)
 
@@ -109,6 +110,7 @@ docking_res_files = dock_instance.run_docking(ligand_sdf)
 ### Run tests
 
 ```bash
+# In these tests, we set the spacing to 0.5 in order to quickly complete the functional test.
 cd test
 # performing preare ligand, receptor and docking separately.
 python3 test_data_prepare.py
@@ -119,6 +121,21 @@ python3 test_protenix_dock.py
 # calculate pose rmsd.
 python3 test_rmsd.py
 ```
+
+## Contribution
+
+Please check [Contributing](CONTRIBUTING.md) for more details. If you encounter problems using Protenix—Dock, feel free to create an issue! We also welcome pull requests from the community.
+
+## Code of Conduct
+
+Please check [Code of Conduct](CODE_OF_CONDUCT.md) for more details.
+
+## Security
+
+If you discover a potential security issue in this project, or think you may
+have discovered a security issue, we ask that you notify Bytedance Security via our [security center](https://security.bytedance.com/src) or [vulnerability reporting email](sec@bytedance.com).
+
+Please do **not** create a public GitHub issue.
 
 ## License 
 

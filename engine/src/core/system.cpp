@@ -166,6 +166,23 @@ static std::string to_string(const std::vector<lj_vdw>& vdw_params,
     return oss.str();
 }
 
+static std::string to_string(const std::vector<nonbonded_atom_pair>& pairs,
+                             const std::string& prefix) {
+    std::ostringstream oss;
+    oss << "[" << std::endl;
+    for (auto& item : pairs) {
+        oss << prefix << "  {" << std::endl
+            << prefix << "    \"ids\": [" << item.ids[0] << ", "
+                                          << item.ids[1] << "]," << std::endl
+            << prefix << "    \"c6\": " << item.c6 << "," << std::endl
+            << prefix << "    \"c12\": " << item.c12 << "," << std::endl
+            << prefix << "    \"qq\": " << item.qq << std::endl
+            << "}," << std::endl;
+    }
+    oss << prefix + "]";
+    return oss.str();
+}
+
 static std::string to_string(const std::vector<atom_pair>& pairs,
                              const std::string& prefix) {
     std::ostringstream oss;
