@@ -24,6 +24,7 @@
 #include <boost/property_tree/json_parser.hpp>
 
 #include "bytedock/core/constant.h"
+#include "bytedock/core/pair.h"
 #include "bytedock/ext/logging.h"
 #include "bytedock/lib/error.h"
 
@@ -160,6 +161,19 @@ inline void fill(const pt::ptree& node, std::vector<param_t>& dest) {
     }
 }
 
+static void fill(const pt::ptree& node, std::vector<nonbonded_atom_pair>& dest) {
+    dest.resize(node.size());
+    size_t i = 0, j;
+    for (auto& pair : node) {
+        j = 0;
+        for (auto& atom : pair.second) {
+            dest[i].ids[j] = atom.second.get_value<index_t>();
+            j++;
+        }
+        i++;
+    }
+}
+
 static void fill(const pt::ptree& node, std::vector<atom_pair>& dest) {
     dest.resize(node.size());
     size_t i = 0, j;
@@ -233,13 +247,45 @@ inline void fill(const pt::ptree& node, std::vector<std::vector<index_t> >& dest
 
 inline void nolmaliz_vdw_types(std::vector<index_t>& vdw_types) {
     for (size_t i = 0; i < vdw_types.size(); i++) {
-        vdw_types[i] -= KVdwOffset;
+        vdw_types[i] -= KVdwTypeOffset;
         if (vdw_types[i] > kNumVdwTypes || vdw_types[i] < 0) {
             std::ostringstream oss;
             oss << "VDW type [" << vdw_types[i] << "] of atom#"
                 << i << "is illegal!";
             throw failed_conf_error(oss.str());
         }
+    }
+}
+
+const lj_vdw* get_ligand_vdw_param(const force_field_params& ffp, const index_t idx) {
+    return kVdwTypeDatabase + ffp.vdw_types[idx];
+}
+
+const lj_vdw* get_receptor_vdw_param(const force_field_params& ffp,
+                                     const index_t idx) {
+    return ffp.vdw_params.data() + idx;
+}
+
+void precalculate_intra_nonbonded_params(force_field_params& ffp, bool ligand) {
+    ffp.precalculated = true;
+
+    // Precalculate Qi*Qj*kCoul
+    for (auto& item : ffp.pairs) precalculate_coul_pair(ffp.partial_charges, item);
+    for (auto& item : ffp.others) precalculate_coul_pair(ffp.partial_charges, item);
+
+    // Precalculate C6 & C12
+    std::function<
+        const lj_vdw*(const force_field_params&, const index_t)
+    > get_vdw_param = ligand ? get_ligand_vdw_param : get_receptor_vdw_param;
+    for (auto& item : ffp.pairs) {
+        precalculate_vdw_pair(get_vdw_param(ffp, item.ids[0]),
+                              get_vdw_param(ffp, item.ids[1]),
+                              item);
+    }
+    for (auto& item : ffp.others) {
+        precalculate_vdw_pair(get_vdw_param(ffp, item.ids[0]),
+                              get_vdw_param(ffp, item.ids[1]),
+                              item);
     }
 }
 
@@ -273,6 +319,7 @@ inline void fill(const pt::ptree& node, const bool ligand, force_field_params& d
     dest.molecular_weight = node.get<param_t>("molecular_weight", -1.);
     fill(node.get_child("atomic_numbers"), dest.atomic_numbers);
     fill(node.get_child("bond_index"), dest.all_bonds);
+    precalculate_intra_nonbonded_params(dest, ligand);  // Required charges, pairs and others
 }
 
 static void fill(const pt::ptree& node, molecule_pose& dest) {
