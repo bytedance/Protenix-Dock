@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "bytedock/lib/dtype.h"
+#include "bytedock/simd/allocator.h"
 
 namespace bytedock {
 
@@ -119,7 +120,7 @@ struct force_field_params {
 struct atom_position {
     param_t xyz[3];
 };
-typedef std::vector<atom_position> molecule_pose;
+typedef simd_vector<atom_position> molecule_pose;
 
 struct rigid_group {
     /**

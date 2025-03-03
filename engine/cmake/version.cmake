@@ -31,7 +31,16 @@ endif()
 
 set(VERSION "namespace bytedock {
 
-const char* VERSION_STR = \"ProtenixDock ${GIT_BRANCH}@${GIT_REV}${GIT_DIFF}\";
+const char* VERSION_STR = \"ProtenixDock\"
+#if ENABLE_DOUBLE_PRECISION
+                          \"Double\"
+#else
+                          \"Float\"
+#endif
+#if ENABLE_SIMD_AVX2
+                          \"+AVX2\"
+#endif
+                          \" ${GIT_BRANCH}@${GIT_REV}${GIT_DIFF}\";
 
 }
 ")

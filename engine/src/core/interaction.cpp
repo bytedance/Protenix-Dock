@@ -19,6 +19,8 @@
 
 #include "bytedock/core/constant.h"
 #include "bytedock/core/pair.h"
+#include "bytedock/ext/counter.h"
+#include "bytedock/ext/logging.h"
 
 namespace bytedock {
 
@@ -114,7 +116,36 @@ param_t fourier_dihedral_interaction::put_gradients(
     return energy;
 }
 
+#ifdef ENABLE_SIMD_AVX2
 param_t self_nonbonded_interactions::put_gradients(
+    const molecule_pose& mol_xyz,
+    const force_field_params& mol_ffdata,
+    molecule_pose& xyz_gradient
+) {
+    /*
+     * In usual cases, it is ensured that:
+     *     mol_ffdata.others.size() > mol_ffdata.pairs.size()
+     * Thus, we can skip checking the length of 1-4 pairs.
+     */
+    if (mol_ffdata.others.size() > (BDOCK_SIMD_REAL_WIDTH >> 1)) {
+        if (!mol_ffdata.precalculated) throw std::runtime_error(
+            "Please call precalculate_intra_nonbonded_params(...) on ffdata first!"
+        );
+        param_t coul_e = 0_r, vdw_e = 0_r;
+        calculate_nb_pairs(mol_ffdata.pairs, coul14_scale_, vdw14_scale_, mol_xyz,
+                           coul_e, vdw_e, xyz_gradient);
+        calculate_nb_pairs(mol_ffdata.others, 1_r, 1_r, mol_xyz,
+                           coul_e, vdw_e, xyz_gradient);
+        return coul_e + vdw_e;
+    } else {
+        return put_gradients_nosimd(mol_xyz, mol_ffdata, xyz_gradient);
+    }
+}
+
+param_t self_nonbonded_interactions::put_gradients_nosimd(
+#else
+param_t self_nonbonded_interactions::put_gradients(
+#endif
     const molecule_pose& mol_xyz,
     const force_field_params& mol_ffdata,
     molecule_pose& xyz_gradient

@@ -19,6 +19,11 @@ if(BDOCK_DOUBLE)
   add_definitions(-DENABLE_DOUBLE_PRECISION=1)
 endif()
 
+option(BDOCK_AVX2 "Enable SIMD acceleration using FMA & AVX2 instruction sets." OFF)
+if(BDOCK_AVX2)
+  add_definitions(-DENABLE_SIMD_AVX2=1)
+endif()
+
 option(BDOCK_PYSDK "If set, Build a Python module. Otherwise, build command-line binaries." OFF)
 if(BDOCK_PYSDK)
   set(BDOCK_VETOS OFF)
@@ -68,10 +73,14 @@ include_directories(${Dock_SOURCE_DIR})
 
 file(GLOB BdockOpt_SOURCES "${Dock_SOURCE_DIR}/core/*.cpp"
                            "${Dock_SOURCE_DIR}/ext/*.cpp"
-                           "${Dock_SOURCE_DIR}/lib/*.cpp")
+                           "${Dock_SOURCE_DIR}/lib/*.cpp"
+                           "${Dock_SOURCE_DIR}/simd/*.cpp")
 list(APPEND BdockOpt_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/version.cpp")
 
 add_library(Dock_LIBRARY SHARED ${BdockOpt_SOURCES})
+if(BDOCK_AVX2)
+  target_compile_options(Dock_LIBRARY PRIVATE "-mavx2" "-mfma")
+endif()
 if(BDOCK_VETOS AND NOT VeTos_FOUND)
   add_dependencies(Dock_LIBRARY VeTos)
 endif()
@@ -161,6 +170,9 @@ if(BDOCK_UTESTS)
 
   enable_testing()
   add_executable(bdock_test ${Dock_UnitTest_SOURCES})
+  if(BDOCK_AVX2)
+    target_compile_options(bdock_test PRIVATE "-mavx2" "-mfma")
+  endif()
   target_link_libraries(bdock_test GTest::gtest_main Dock_LIBRARY)
 
   include(GoogleTest)

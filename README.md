@@ -43,6 +43,12 @@ source.
 python3 setup.py install
 ```
 
+If your CPU is equiped with AVX2 instructions, you can build a faster one.
+```bash
+export PXDOCK_ENABLE_AVX2=1
+python3 setup.py install
+```
+
 ### 3. Install command-line tools (Optional):
 
 If receptors & ligands are already prepared and only docking/optimizatioin/evaluation
@@ -55,7 +61,10 @@ mkdir build
 cd build
 
 destdir=~/pxdock
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$destdir
+cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=$destdir \
+    -DBDOCK_AVX2=OFF  # If your CPU supports AVX2, turn on it for better speed
 make -j8 install
 
 confdir=$destdir/conf

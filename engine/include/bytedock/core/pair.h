@@ -19,6 +19,7 @@
 
 #include "bytedock/core/system.h"
 #include "bytedock/lib/math.h"
+#include "bytedock/simd/avx2_def.h"
 
 namespace bytedock {
 
@@ -103,5 +104,92 @@ inline param_t calculate_vdw_pair(const lj_vdw& type_i,
     add_inplace_3d(grad_j.xyz, grad);
     return (u12 - u6) * fused;
 }
+
+#ifdef ENABLE_SIMD_AVX2
+static void calculate_nb_pairs(const std::vector<nonbonded_atom_pair>& pairs,
+                               const param_t coul_scale, param_t vdw_scale,
+                               const molecule_pose& mol_xyz,
+                               param_t& m_coul_e, param_t& m_vdw_e,
+                               molecule_pose& xyz_gradient) {
+    auto coords = reinterpret_cast<const param_t*>(mol_xyz.data());
+    auto grads = reinterpret_cast<param_t*>(xyz_gradient.data());
+
+    // Constant values
+    simd_real cf(kCoulombFactor * coul_scale);
+    simd_real vf(vdw_scale);
+    simd_real six(6_r);
+    simd_real twelve(12_r);
+
+    // Variables for SIMD
+    alignas(BDOCK_SIMD_ALIGNMENT) index_t m_ai[BDOCK_SIMD_REAL_WIDTH];
+    alignas(BDOCK_SIMD_ALIGNMENT) index_t m_aj[BDOCK_SIMD_REAL_WIDTH];
+    alignas(BDOCK_SIMD_ALIGNMENT) param_t m_qq[BDOCK_SIMD_REAL_WIDTH];
+    alignas(BDOCK_SIMD_ALIGNMENT) param_t m_c6[BDOCK_SIMD_REAL_WIDTH];
+    alignas(BDOCK_SIMD_ALIGNMENT) param_t m_c12[BDOCK_SIMD_REAL_WIDTH];
+
+    // Calculate by pack
+    const size_t npairs = pairs.size();
+    simd_real coul_e(0_r), vdw_e(0_r);
+    for (size_t i = 0; i < npairs; i += BDOCK_SIMD_REAL_WIDTH) {
+        size_t s, iu;
+
+        // Assemble inputs
+        for (s = 0, iu = i; s < BDOCK_SIMD_REAL_WIDTH; ++s, ++iu) {
+            if (iu == npairs) break;
+            auto& item = pairs[iu];
+            m_ai[s] = item.ids[0];
+            m_aj[s] = item.ids[1];
+            m_qq[s] = item.qq;
+            m_c6[s] = item.c6;
+            m_c12[s] = item.c12;
+        }
+
+        // Apply padding
+        iu = s - 1;  // It is ensured that s>=1
+        for (; s < BDOCK_SIMD_REAL_WIDTH; ++s) {
+            m_ai[s] = m_ai[iu];
+            m_aj[s] = m_aj[iu];
+            m_qq[s] = m_c6[s] = m_c12[s] = 0_r;
+        }
+
+        // Load SIMD variables
+        simd_real xi, yi, zi, xj, yj, zj;
+        simd_loadu_xyz(coords, m_ai, xi, yi, zi);
+        simd_loadu_xyz(coords, m_aj, xj, yj, zj);
+        auto qqk = simd_load(m_qq) * cf;
+        auto c6 = simd_load(m_c6);
+        auto c12 = simd_load(m_c12);
+
+        // Calculate distance & its inverse
+        auto dx = xj - xi;
+        auto dy = yj - yi;
+        auto dz = zj - zi;
+        auto rinv = simd_invsqrt(dx*dx + dy*dy + dz*dz);
+        auto rinv2 = rinv * rinv;
+        auto rinv6 = rinv2 * rinv2 * rinv2;
+
+        // Calculate the Coulomb part
+        coul_e = simd_fma(qqk, rinv, coul_e);
+        auto de_dr_r = qqk * rinv2 * rinv;
+
+        // Calculate the VDW part
+        rinv = rinv6 * vf;  // Use rinv as tmp
+        auto u6 = c6 * rinv;
+        auto u12 = c12 * rinv6 * rinv;
+        vdw_e = u12 - u6 + vdw_e;
+        rinv6 = simd_fms(twelve, u12, six * u6);  // Use rinv6 as tmp
+        de_dr_r = simd_fma(rinv6, rinv2, de_dr_r);
+        auto gx = de_dr_r * dx;  // atom i
+        auto gy = de_dr_r * dy;  // atom i
+        auto gz = de_dr_r * dz;  // atom i
+
+        // Update gradients
+        simd_incru_xyz(grads, m_ai, gx, gy, gz);
+        simd_decru_xyz(grads, m_aj, gx, gy, gz);
+    }
+    m_coul_e += simd_reduce(coul_e);
+    m_vdw_e += simd_reduce(vdw_e);
+}
+#endif
 
 }

@@ -143,7 +143,7 @@ inline void add_grad(const param_t t, const std::vector<param_t>& d,
 class obj_func_closure {
 public:
     explicit obj_func_closure(
-        binding_system_interactions& model, size_t& fun_evals,
+        binding_system_interactions& model, index_t& fun_evals,
         std::vector<param_t>& receptor_torsions, molecule_pose& ligand_xyz,
         std::vector<param_t>& torsion_gradient, molecule_pose& ligand_gradient
     ) : bsi_(model), evals_(fun_evals), rt_(receptor_torsions), lxyz_(ligand_xyz),
@@ -179,7 +179,7 @@ public:
         oss << prefix << "    [" << ptr[0] << ", " << ptr[1] << ", " << ptr[2] << "]" << std::endl;
         oss << prefix << "]," << std::endl;
         oss << prefix << "  \"torsions\": [";
-        for (size_t  i = 0; i < rt_.size() - 1; i++) {
+        for (size_t i = 0; i < rt_.size() - 1; i++) {
             oss << rt_[i] << ", ";
         }
         oss << rt_[rt_.size() - 1];
@@ -190,7 +190,7 @@ public:
 
 private:
     binding_system_interactions& bsi_;
-    size_t& evals_;
+    index_t& evals_;
 
     std::vector<param_t>& rt_;
     molecule_pose& lxyz_;
