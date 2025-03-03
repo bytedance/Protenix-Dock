@@ -17,27 +17,21 @@
 
 #pragma once
 
-#include <cstdint>
+#if ENABLE_SIMD_AVX2
+
+#define BDOCK_SIMD_ALIGNMENT 32  // Bytes
+
+#include "bytedock/simd/avx2_double.h"
+#include "bytedock/simd/avx2_float.h"
 
 namespace bytedock {
-
 #if ENABLE_DOUBLE_PRECISION
-typedef double param_t;
+#define BDOCK_SIMD_REAL_WIDTH BDOCK_SIMD_DOUBLE_WIDTH
+typedef simd_double simd_real;
 #else
-typedef float param_t;
+#define BDOCK_SIMD_REAL_WIDTH BDOCK_SIMD_FLOAT_WIDTH
+typedef simd_float simd_real;
 #endif
-
-// Refer to https://stackoverflow.com/a/36594669/28276974
-using size_t = decltype(sizeof(int));
-
-typedef std::int32_t index_t;
-
-constexpr param_t operator ""_r(long double value) {
-    return (param_t)value;
 }
 
-constexpr param_t operator ""_r(unsigned long long int value) {
-    return (param_t)value;
-}
-
-}
+#endif

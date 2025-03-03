@@ -55,6 +55,11 @@ public:
     param_t put_gradients(const molecule_pose& mol_xyz,
                           const force_field_params& mol_ffdata,
                           molecule_pose& xyz_gradient);
+#if ENABLE_SIMD_AVX2  // For testing
+    param_t put_gradients_nosimd(const molecule_pose& mol_xyz,
+                                 const force_field_params& mol_ffdata,
+                                 molecule_pose& xyz_gradient);
+#endif
 
 private:
     param_t coul14_scale_;

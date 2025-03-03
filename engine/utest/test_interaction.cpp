@@ -169,7 +169,6 @@ TEST(IntraMolecularTest, SelfNonbonded) {
         {10.482, 24.527, 5.659},
         {10.255, 23.716, 6.568},
     };
-    molecule_pose xyz_gradient(mol_xyz.size());  // Zero initialization in default
 
     force_field_params mol_ffdata;
     mol_ffdata.pairs = {  // ids[2]
@@ -205,9 +204,7 @@ TEST(IntraMolecularTest, SelfNonbonded) {
     };
     precalculate_intra_nonbonded_params(mol_ffdata, false);
 
-    self_nonbonded_interactions sni;
-    double energy = sni.put_gradients(mol_xyz, mol_ffdata, xyz_gradient);
-
+    atom_position bias = {1., 2., 3.};
     double ref_energy = 12.38822;
     molecule_pose ref_gradient = {
         { 0.2816, -0.4702, -0.6080},
@@ -219,10 +216,24 @@ TEST(IntraMolecularTest, SelfNonbonded) {
         { 1.2506, -1.0887, -2.0243},
         {-3.0981,  5.2822,  1.9613},
     };
+
+    self_nonbonded_interactions sni;
+    molecule_pose xyz_gradient(mol_xyz.size(), bias);
+    double energy = sni.put_gradients(mol_xyz, mol_ffdata, xyz_gradient);
     EXPECT_NEAR(ref_energy, energy, 1e-3);
     for (size_t i = 0; i < mol_xyz.size(); i++) {
+        minus_inplace_3d(xyz_gradient[i].xyz, bias.xyz);
         check_3d(ref_gradient[i].xyz, xyz_gradient[i].xyz, 3e-3);
     }
+#ifdef ENABLE_SIMD_AVX2
+    molecule_pose normal_g(mol_xyz.size(), bias);
+    double normal_e = sni.put_gradients_nosimd(mol_xyz, mol_ffdata, normal_g);
+    EXPECT_NEAR(normal_e, energy, 1e-6);
+    for (size_t i = 0; i < mol_xyz.size(); i++) {
+        minus_inplace_3d(normal_g[i].xyz, bias.xyz);
+        check_3d(normal_g[i].xyz, xyz_gradient[i].xyz, 1e-6);
+    }
+#endif
 }
 
 TEST(InterMolecularTest, InterMolecular) {

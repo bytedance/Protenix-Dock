@@ -35,6 +35,8 @@ class CMakeBuild(build_ext):
             "-DCMAKE_INSTALL_PREFIX=" + extdir,
             "-DBDOCK_PYSDK=ON"
         ]
+        if int(os.environ.get("PXDOCK_ENABLE_AVX2", "0")) > 0:
+            cmake_args += ["-DBDOCK_AVX2=ON"]
         build_args = ["--config", "Release"]
         num_jobs = multiprocessing.cpu_count()
         build_args += ["--", f"-j{num_jobs}"]
@@ -52,7 +54,7 @@ class CMakeBuild(build_ext):
     def copy_cmake_output(self, target_dir):
         dst_dir = os.path.join(target_dir, package_name)
         for name in ("lib", "lib64"):
-            src_dir = os.path.join(target_dir, "lib")
+            src_dir = os.path.join(target_dir, name)
             if os.path.exists(src_dir):
                 for filename in os.listdir(src_dir):
                     full_file_name = os.path.join(src_dir, filename)

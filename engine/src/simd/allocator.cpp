@@ -15,29 +15,22 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#pragma once
+#include "bytedock/simd/allocator.h"
 
-#include <cstdint>
+#include <cstdlib>
 
 namespace bytedock {
 
-#if ENABLE_DOUBLE_PRECISION
-typedef double param_t;
-#else
-typedef float param_t;
-#endif
+// For most Intel processors, the cache line size is 64 bytes
+static const size_t kSimdAlignmentInBytes = 64;
 
-// Refer to https://stackoverflow.com/a/36594669/28276974
-using size_t = decltype(sizeof(int));
-
-typedef std::int32_t index_t;
-
-constexpr param_t operator ""_r(long double value) {
-    return (param_t)value;
+void* simd_allocation_policy::alloc(std::size_t bytes) {
+    bytes += kSimdAlignmentInBytes;  // Pad memory at the end to avoid false sharing
+    return std::aligned_alloc(kSimdAlignmentInBytes, bytes);
 }
 
-constexpr param_t operator ""_r(unsigned long long int value) {
-    return (param_t)value;
+void simd_allocation_policy::free(void* p) {
+    if (p) std::free(p);
 }
 
 }
