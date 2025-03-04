@@ -32,11 +32,13 @@ inline bool endswith(const std::string& value, const std::string& suffix) {
 int main(int argc, char* argv[]) {
     po::options_description in_args("Inputs");
     std::string sf_file, receptor_file, ligand_index_file;
+    bool include_bscore;
     int nthreads;
     in_args.add_options()
         ("scoring_function", po::value<std::string>(&sf_file), "A Json file defining the scoring function. If empty, v6 is enabled.")
         ("receptor_file", po::value<std::string>(&receptor_file), "A Json file describing the receptor.")
         ("ligand_index", po::value<std::string>(&ligand_index_file), "Text file where each line is Json file describing ligand.")
+        ("include_affinity", po::bool_switch(&include_bscore)->default_value(false), "Whether calculate bscore for affinity ranking.")
         ("nthreads", po::value<int>(&nthreads)->default_value(0), "Thread count for evaluations. 0 means all available cores.")
     ;
 
@@ -118,7 +120,7 @@ int main(int argc, char* argv[]) {
     try {
         bd::setup_global_logging(log_file, verbosity);
         bd::ReusableEngine engine(receptor_file, sf_file, nthreads);
-        engine.evaluate(ligand_index_file, output_file);
+        engine.evaluate(ligand_index_file, output_file, include_bscore);
         return 0;
     } catch (std::exception& e) {
         std::cerr << e.what() << std::endl;

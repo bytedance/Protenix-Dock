@@ -147,7 +147,8 @@ void ReusableEngine::load_maps(const std::string& cache_dir) {
 }
 
 void ReusableEngine::evaluate(const std::string& ligand_index_file,
-                              const std::string& output_file) {
+                              const std::string& output_file,
+                              bool include_bscore) {
     perf_counter::singleton().reset();
 
     // Prepare root task
@@ -187,7 +188,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
         evaluators.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_INFO << "Evaluator has started...";
-            scoring_evaluator one(sf_mgr_, parsed_queue);
+            scoring_evaluator one(sf_mgr_, include_bscore, parsed_queue);
             one.fill(pose_queue);
             LOG_INFO << "Evaluator has ended.";
         });
@@ -205,7 +206,8 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
 void ReusableEngine::optimize(const std::string& ligand_index_file,
                               const std::string& output_dir,
                               int max_niters,
-                              double slope) {
+                              double slope,
+                              bool include_bscore) {
     perf_counter::singleton().reset();
 
     // Prepare root task
@@ -281,7 +283,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
         writers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Writer has started...";
-            pose_ranker one(sf_mgr_, output_dir, ligand_queue);
+            pose_ranker one(sf_mgr_, include_bscore, output_dir, ligand_queue);
             one.fill(outf_queue);
             LOG_DEBUG << "Writer has ended.";
         });
@@ -324,7 +326,8 @@ void ReusableEngine::search(const std::string& ligand_index_file,
                             int num_modes,
                             double min_rmsd,
                             double mc_mmenergy_threshold,
-                            double slope) {
+                            double slope,
+                            bool include_bscore) {
     perf_counter::singleton().reset();
 
     // Prepare root task
@@ -401,7 +404,8 @@ void ReusableEngine::search(const std::string& ligand_index_file,
         writers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Writer has started...";
-            pose_cluster one(sf_mgr_, num_modes, min_rmsd, output_dir, ligand_queue);
+            pose_cluster one(sf_mgr_, num_modes, min_rmsd, include_bscore,
+                             output_dir, ligand_queue);
             one.fill(outf_queue);
             LOG_DEBUG << "Writer has ended.";
         });

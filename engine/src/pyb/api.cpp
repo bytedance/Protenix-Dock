@@ -48,17 +48,20 @@ BOOST_PYTHON_MODULE(_protenix_dock) {
         .def("load_maps", &ReusableEngine::load_maps, arg("cache_dir"))
         .def("drop_maps", &ReusableEngine::drop_maps)
         .def("evaluate", &ReusableEngine::evaluate, (
-            arg("ligand_index_file"), arg("output_dir")
+            arg("ligand_index_file"), arg("output_dir"),
+            arg("include_bscore") = false
         ))
         .def("optimize", &ReusableEngine::optimize, (
             arg("ligand_index_file"), arg("output_dir"),
-            arg("max_niters") = 240, arg("slope") = 1e6
+            arg("max_niters") = 240, arg("slope") = 1e6,
+            arg("include_bscore") = false
         ))
         .def("search", &ReusableEngine::search, (
             arg("ligand_index_file"), arg("output_dir"),
             arg("seed") = 0, arg("exhaustiveness") = 256, arg("max_nsteps") = 200,
             arg("relax_nsteps") = 40, arg("num_modes") = 8, arg("min_rmsd") = 0.5,
-            arg("mc_mmenergy_threshold") = -1., arg("slope") = 1e6
+            arg("mc_mmenergy_threshold") = -1., arg("slope") = 1e6,
+            arg("include_bscore") = false
         ))
     ;
 }

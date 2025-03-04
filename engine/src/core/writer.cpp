@@ -84,7 +84,7 @@ void pose_writer::fill(blocking_queue<std::string>& file_queue) {
     auto pair = std::move(batch_queue_.pop());
     while (!batch_queue_.is_eoq(pair)) {
         nposes_manager::singleton().erase(pair.first);
-        if (preprocess(pair.second)) {
+        if (preprocess(pair.second, include_bscore_)) {
             LOG_DEBUG << "Tasks with prefix [" << pair.first << "] has finished.";
             file_queue.push(consume(pair.first, pair.second));
         } else {
@@ -121,7 +121,7 @@ static void find_closest_pose(
     }
 }
 
-bool pose_cluster::preprocess(pose_batch& aggregated) {
+bool pose_cluster::preprocess(pose_batch& aggregated, bool include_bscore) {
     auto& candidates = aggregated.candidates;  // At least 1 pose
 
     // Cluster conformer candidates
@@ -164,7 +164,7 @@ bool pose_cluster::preprocess(pose_batch& aggregated) {
 
     // Calculate affinity score
     aggregated.best_id = 0;
-    {
+    if (include_bscore) {
         step_timer t(EVALUATE_AFFINITY_SCORE_STEP);
         auto& bb = sf_mgr_.get_affinity_ranking();
         auto& best_pose = candidates[0];
@@ -176,7 +176,7 @@ bool pose_cluster::preprocess(pose_batch& aggregated) {
     return true;
 }
 
-bool pose_ranker::preprocess(pose_batch& aggregated) {
+bool pose_ranker::preprocess(pose_batch& aggregated, bool include_bscore) {
     auto& candidates = aggregated.candidates;  // At least 1 pose
     auto& pp = sf_mgr_.get_pose_selection();
     auto& receptor_ffdata = aggregated.receptor->get_ffdata();
@@ -197,7 +197,7 @@ bool pose_ranker::preprocess(pose_batch& aggregated) {
         }
     }
     aggregated.best_id = best_id;
-    {
+    if (include_bscore) {
         step_timer t(EVALUATE_AFFINITY_SCORE_STEP);
         auto& bb = sf_mgr_.get_affinity_ranking();
         auto& best_pose = candidates[best_id];
