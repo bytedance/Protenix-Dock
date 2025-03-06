@@ -25,7 +25,7 @@ if(BDOCK_AVX2)
 endif()
 
 option(BDOCK_PYSDK "If set, Build a Python module. Otherwise, build command-line binaries." OFF)
-if(BDOCK_PYSDK)
+if(BDOCK_PYSDK OR APPLE)
   set(BDOCK_VETOS OFF)
 else()
   set(BDOCK_VETOS ON)
@@ -123,14 +123,17 @@ if(BDOCK_PYSDK)
 endif()
 
 # An OS-dependent trick: https://stackoverflow.com/q/53428219/28276974
-if(BDOCK_VETOS)
-  set_target_properties(Dock_LIBRARY PROPERTIES INSTALL_RPATH "\${ORIGIN}")
+if(APPLE)
+  set(RPATH_BASE "@loader_path")
+else()
+  set(RPATH_BASE "\${ORIGIN}")
 endif()
+
 if(BDOCK_PYSDK)
-  set_target_properties(_protenix_dock PROPERTIES INSTALL_RPATH "\${ORIGIN}")
+  set_target_properties(_protenix_dock Dock_LIBRARY PROPERTIES INSTALL_RPATH "${RPATH_BASE}")
 else()
   set_target_properties(bdock bdopt bdgen bdscr PROPERTIES
-                        INSTALL_RPATH "\${ORIGIN}/../lib")
+                        INSTALL_RPATH "${RPATH_BASE}/../lib")
 endif()
 
 include(GNUInstallDirs)
