@@ -178,7 +178,7 @@ inline param_t safe_divide(const param_t dividend, const param_t divisor) {
 }
 
 inline param_t clamp(const param_t value, const param_t min, const param_t max) {
-    return std::min(MATH_PAIR_MAX(value, min), max);
+    return std::fmin(MATH_PAIR_MAX(value, min), max);
 }
 
 inline param_t get_linear_percent(

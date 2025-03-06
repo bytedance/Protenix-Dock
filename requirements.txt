@@ -6,7 +6,7 @@ func-timeout~=4.3.5
 parmed~=4.3.0
 pdb4amber~=1.4.1
 MDAnalysis
-vina @ https://files.pythonhosted.org/packages/75/b2/1dad979aea28fcca8aa06832744aa1b62ab80cad08980115a580a4861b8d/vina-1.2.5.tar.gz
+vina @ https://files.pythonhosted.org/packages/d2/2a/6746ef5e57b1c643e9fb24ad9e4fa520add7338736d50954e0fbc12ae52e/vina-1.2.7.tar.gz
 PyYaml
 pdb2pqr~=3.6.1
 meeko~=0.3.3
