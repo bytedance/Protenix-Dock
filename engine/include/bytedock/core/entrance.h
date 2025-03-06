@@ -44,10 +44,12 @@ public:
     void load_maps(const std::string& cache_dir);
 
     void evaluate(const std::string& ligand_index_file,
-                  const std::string& output_file);
+                  const std::string& output_file,
+                  bool include_bscore);
     void optimize(const std::string& ligand_index_file,
                   const std::string& output_dir,
-                  int max_niters, double slope);
+                  int max_niters, double slope,
+                  bool include_bscore);
     void search(const std::string& ligand_index_file,
                 const std::string& output_dir,
                 int seed,
@@ -57,7 +59,8 @@ public:
                 int num_modes,
                 double min_rmsd,
                 double mc_mmenergy_threshold,
-                double slope);
+                double slope,
+                bool include_bscore);
 
 private:
     const size_t nreaders_;

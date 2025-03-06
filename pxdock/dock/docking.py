@@ -85,6 +85,7 @@ class ProtenixDock(object):
         out_dir: str = None,
         penalty: float = 1e6,
         vina_nposes: int = 50,
+        include_affinity: bool = False,
     ):
         ligand_jsons = self._prepare_json(
             ligand_sdf_file, mode="pose_opt", vina_nposes=vina_nposes
@@ -100,7 +101,8 @@ class ProtenixDock(object):
                 f.write("\n")
         if out_dir is None:
             out_dir = os.path.join(kWorkDir, f"{my_random_string()}_pose_opt_out")
-        self._engine.optimize(ligand_index_file, out_dir, slope=penalty)
+        self._engine.optimize(ligand_index_file, out_dir, 
+                              slope=penalty, include_bscore=include_affinity)
 
         return out_dir
 
@@ -113,6 +115,7 @@ class ProtenixDock(object):
         num_walker: int = 256,
         relax_nsteps: int = 40,
         mc_prune_energy_threshold: float = -1,
+        include_affinity: bool = False,
     ):
         ligand_jsons = self._prepare_json(
             ligand_sdf_file,
@@ -138,6 +141,7 @@ class ProtenixDock(object):
             relax_nsteps=relax_nsteps,
             mc_mmenergy_threshold=mc_prune_energy_threshold,
             slope=penalty,
+            include_bscore=include_affinity,
         )
 
         return out_dir

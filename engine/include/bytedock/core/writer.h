@@ -32,20 +32,23 @@ namespace fs = boost::filesystem;
 class pose_writer {
 public:
     pose_writer(
-        const scoring_function_factory& sf_manager, const std::string& output_dir,
+        const scoring_function_factory& sf_manager,
+        bool include_bscore, const std::string& output_dir,
         blocking_queue<name_and_batch>& in_queue
-    ) : sf_mgr_(sf_manager), output_dir_(output_dir), batch_queue_(in_queue) {}
+    ) : sf_mgr_(sf_manager), include_bscore_(include_bscore),
+        output_dir_(output_dir), batch_queue_(in_queue) {}
 
     void fill(blocking_queue<std::string>& file_queue);
 
 protected:
-    virtual bool preprocess(pose_batch& aggregated) = 0;
+    virtual bool preprocess(pose_batch& aggregated, bool include_bscore) = 0;
 
     const scoring_function_factory& sf_mgr_;
 
 private:
     std::string consume(const std::string& name, pose_batch& batch);
 
+    const bool include_bscore_;
     const fs::path output_dir_;
     blocking_queue<name_and_batch>& batch_queue_;
 };
@@ -53,13 +56,15 @@ private:
 class pose_cluster : public pose_writer {
 public:
     pose_cluster(
-        const scoring_function_factory& sf_manager, size_t num_modes, param_t min_rmsd,
-        const std::string& output_dir, blocking_queue<name_and_batch>& in_queue
-    ) : pose_writer(sf_manager, output_dir, in_queue),
+        const scoring_function_factory& sf_manager,
+        size_t num_modes, param_t min_rmsd,
+        bool include_bscore, const std::string& output_dir,
+        blocking_queue<name_and_batch>& in_queue
+    ) : pose_writer(sf_manager, include_bscore, output_dir, in_queue),
         num_modes_(num_modes), min_rmsd_(min_rmsd) {}
 
 protected:
-    bool preprocess(pose_batch& aggregated) override;
+    bool preprocess(pose_batch& aggregated, bool include_bscore) override;
 
 private:
     const size_t num_modes_;
@@ -69,12 +74,13 @@ private:
 class pose_ranker : public pose_writer {
 public:
     pose_ranker(
-        const scoring_function_factory& sf_manager, const std::string& output_dir,
+        const scoring_function_factory& sf_manager,
+        bool include_bscore, const std::string& output_dir,
         blocking_queue<name_and_batch>& in_queue
-    ) : pose_writer(sf_manager, output_dir, in_queue) {}
+    ) : pose_writer(sf_manager, include_bscore, output_dir, in_queue) {}
 
 protected:
-    bool preprocess(pose_batch& aggregated) override;
+    bool preprocess(pose_batch& aggregated, bool include_bscore) override;
 };
 
 class report_writer {

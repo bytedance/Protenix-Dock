@@ -48,6 +48,7 @@ void pose_aggregator::fill(blocking_queue<name_and_batch>& ligand_queue) {
             batch.receptor = task.feed.receptor;
             batch.ligand = task.feed.ligand;
             batch.candidates.resize(nposes);
+            batch.bscore = 1e8_r;  // Indicate it is invalid
         }
         store_[name].candidates[task.feed.pose_id] = std::move(task.fetch);
         if (iter1->second > 1) {

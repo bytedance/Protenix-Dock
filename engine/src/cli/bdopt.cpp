@@ -28,10 +28,12 @@ namespace po = boost::program_options;
 int main(int argc, char* argv[]) {
     po::options_description in_args("Inputs");
     std::string sf_file, receptor_file, ligand_index_file;
+    bool include_bscore;
     in_args.add_options()
         ("scoring_function", po::value<std::string>(&sf_file), "A Json file defining the scoring function. If empty, v6 is enabled.")
         ("receptor_file", po::value<std::string>(&receptor_file), "A Json file describing the receptor.")
         ("ligand_index", po::value<std::string>(&ligand_index_file), "Text file where each line is Json file describing ligand.")
+        ("include_affinity", po::bool_switch(&include_bscore)->default_value(false), "Whether calculate bscore for affinity ranking.")
     ;
 
     po::options_description out_args("Outputs");
@@ -218,7 +220,8 @@ int main(int argc, char* argv[]) {
             engine.set_box(center_x, center_y, center_z, size_x, size_y, size_z);
             engine.generate_maps(grid_spacing);
         }
-        engine.optimize(ligand_index_file, output_dir, max_niters, slope);
+        engine.optimize(ligand_index_file, output_dir,
+                        max_niters, slope, include_bscore);
         return 0;
     } catch (std::exception& e) {
         std::cerr << e.what() << std::endl;
