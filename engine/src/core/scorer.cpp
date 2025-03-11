@@ -104,8 +104,8 @@ root_scorer::root_scorer(
         add_child(new torsion_strain_penalty_scorer("TorsionStrain_Penalty"));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.rotatable_energy_coef) {
-        add_coefficient("TorsionStrain_Penalty", sfp.rotatable_energy_coef);
-        add_child(new rotatable_energy("rotatable_energy"));
+        add_coefficient("Rotatable_Energy", sfp.rotatable_energy_coef);
+        add_child(new rotatable_energy("Rotatable_Energy"));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.gbsa_energy_delta_coef) {
         add_coefficient("Gbsa_Com_Energy-Gbsa_Lig_Energy-Gbsa_Pro_Energy",

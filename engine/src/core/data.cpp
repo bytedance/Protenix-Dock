@@ -315,8 +315,8 @@ inline void fill(const pt::ptree& node, const bool ligand, force_field_params& d
     if (ligand) {
         fill(node, dest.bad_torsions);
         fill(node.get_child("rotatable_bond_index"), dest.rotatable_bonds);
+        dest.molecular_weight = node.get<param_t>("molecular_weight", -1.);
     }
-    dest.molecular_weight = node.get<param_t>("molecular_weight", -1.);
     fill(node.get_child("atomic_numbers"), dest.atomic_numbers);
     fill(node.get_child("bond_index"), dest.all_bonds);
     precalculate_intra_nonbonded_params(dest, ligand);  // Required charges, pairs and others
