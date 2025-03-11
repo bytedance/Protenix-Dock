@@ -431,8 +431,15 @@ class LigandParser:
                 bonds, score_function_json=self.score_function_json, task=task
             )
             self.ffdata.update(tstrain_ffdata)
-
-        self.ffdata["molecular_weight"] = self.get_molecular_weight()
+        tmp_molecular_weight = self.get_molecular_weight()
+        if len(tmp_molecular_weight) == 1:
+            self.ffdata["molecular_weight"] = tmp_molecular_weight[0]
+        else:
+            logger.warning(
+                f"molecular weight length is not 1, got {tmp_molecular_weight}, "
+                "so set to default value to -1.0"
+            )
+            self.ffdata["molecular_weight"] = -1.0 # default value
 
     def get_data(self):
         ligand_data = {
