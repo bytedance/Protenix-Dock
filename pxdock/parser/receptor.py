@@ -54,7 +54,6 @@ class ReceptorParser:
         pdb_file=None,
         forcefield="FF14SB",
         find_pocket=True,
-        find_frozen=True,
         center=None,
         box=None,
         parm_output_dir=None,
@@ -65,7 +64,6 @@ class ReceptorParser:
             pdb_file (str): Path to the PDB file of the receptor.
             forcefield (str, optional): Force field to be used. Defaults to "FF14SB".
             find_pocket (bool, optional): Whether to consider the hydrogen atoms far away from pocket not to be rotatable. Defaults to True.
-            find_frozen (bool, optional): Whether to remove intramolecular interactions of frozen atoms. Defaults to True.
             center (list, optional): Center coordinates of the binding pocket. Defaults to None.
             box (list, optional): Dimensions of the binding pocket. Defaults to None.
             parm_output_dir (str, optional): if not None, the parm files (prmtop, inpcrd, gro etc) will be saved to this directory.
@@ -139,8 +137,7 @@ class ReceptorParser:
 
         # get movable atoms, remove any ff idx that is completely frozen
         # TODO flexible residues
-        if find_frozen:
-            self.update_ffdata_mm_idx(self.rotatable_h)
+        self.update_ffdata_mm_idx(self.rotatable_h)
 
         self.hydroph_atoms, _ = self.find_interaction("vina_hydrophobic")
         self.hbond_acc_atoms, _ = self.find_interaction("vina_acceptor")
@@ -427,61 +424,69 @@ class ReceptorParser:
             self.gmx_gro_string = gro_file.read()
 
         receptor_atom_num = receptor_universe.atoms.n_atoms
-        receptor_atomidx = sorted(
-            list(set([atom[0] for atom in self.ffdata["FF_vdW_atomidx"]]))
-        )
         cofactor_atom_num = cofactor_universe.atoms.n_atoms
 
-        old_receptor_data = deepcopy(self.get_data())
-        # update ff data
-        overlap_keys = set(old_receptor_data["ffdata"].keys()) & set(
-            cofactor_data["ffdata"].keys()
-        )
+        # ignore intra-molecular energy items as cofactor atoms are frozen
+        overlap_keys = self.ffdata.keys() & cofactor_data["ffdata"].keys() - set([
+            "FF_Bonds_atomidx",
+            "FF_Bonds_k",
+            "FF_Bonds_length",
+            "FF_Angles_atomidx",
+            "FF_Angles_k",
+            "FF_Angles_angle",
+            "FF_ProperTorsions_atomidx",
+            "FF_ProperTorsions_periodicity",
+            "FF_ProperTorsions_phase",
+            "FF_ProperTorsions_k",
+            "FF_ImproperTorsions_atomidx",
+            "FF_ImproperTorsions_periodicity",
+            "FF_ImproperTorsions_phase",
+            "FF_ImproperTorsions_k",
+            "FF_NonbondedAll_atomidx",
+            "FF_Nonbonded14_atomidx",
+            "bond_index",
+            "is_rotatable"
+        ])
         assert (
-            len(overlap_keys) == 35
-        ), f"overlap keys' number error: {len(overlap_keys)} v.s. 35"
-
-        # update FF_vdW_paraidx
-        self.ffdata["FF_vdW_paraidx"].extend(cofactor_data["ffdata"]["FF_vdW_paraidx"])
+            len(overlap_keys) == 17
+        ), f"overlap keys' number error: {len(overlap_keys)} v.s. 17"
 
         # updata atomidx
         # TODO: update rotatable_h_atomidx later
         update_keys = [key for key in overlap_keys if "atomidx" in key]
-
         assert (
-            len(update_keys) == 18
-        ), f"atomidx keys' number error : {len(update_keys)} v.s. 18"
+            len(update_keys) == 12
+        ), f"atomidx keys' number error : {len(update_keys)} v.s. 12"
+        shift_num = receptor_atom_num
         for update_key in update_keys:
-            shift_num = receptor_atom_num
             new_data = torch.tensor(cofactor_data["ffdata"][update_key]) + shift_num
             self.ffdata[update_key].extend(new_data.tolist())
 
         # update pair between old and new
         cofactor_atomidx = sorted(
-            list(
-                set(
-                    [
-                        atom[0] + receptor_atom_num
-                        for atom in cofactor_data["ffdata"]["FF_vdW_atomidx"]
-                    ]
-                )
+            set(
+                [
+                    atom[0] + receptor_atom_num
+                    for atom in cofactor_data["ffdata"]["FF_vdW_atomidx"]
+                ]
             )
         )
         new_nobond_pairs = [
             [receptor_idx, cofactor_idx]
-            for receptor_idx in receptor_atomidx
+            for receptor_idx in self.rotatable_h
             for cofactor_idx in cofactor_atomidx
-        ]
+        ]  # Only focus on variable-distance pairs
         self.ffdata["FF_NonbondedAll_atomidx"].extend(new_nobond_pairs)
 
         # update FF parameters
         update_keys = [key for key in overlap_keys if "idx" not in key]
         assert (
-            len(update_keys) == 16
-        ), f"FF paramters number error : {len(update_keys)} v.s. 16"
+            len(update_keys) == 4
+        ), f"FF paramters number error : {len(update_keys)} v.s. 4"
         for update_key in update_keys:
             new_data = cofactor_data["ffdata"][update_key]
             self.ffdata[update_key].extend(new_data)
+        self.ffdata["FF_vdW_paraidx"].extend(cofactor_data["ffdata"]["FF_vdW_paraidx"])
 
         # update xyz
         self.xyz = np.concatenate([self.xyz, cofactor_data["xyz"][0]], axis=0)
@@ -498,8 +503,6 @@ class ReceptorParser:
         if self.pocket_index:
             new_data = [receptor_atom_num + i for i in range(1, cofactor_atom_num + 1)]
             self.pocket_index.extend(new_data)
-
-        self.geometry_data = self.get_geometry_data(self.ffdata)
 
         self.ffdata.update(
             deepcopy(
