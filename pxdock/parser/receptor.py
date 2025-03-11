@@ -425,6 +425,7 @@ class ReceptorParser:
 
         receptor_atom_num = receptor_universe.atoms.n_atoms
         cofactor_atom_num = cofactor_universe.atoms.n_atoms
+        self.geometry_data['num_atoms'] = receptor_atom_num + cofactor_atom_num
 
         # ignore intra-molecular energy items as cofactor atoms are frozen
         overlap_keys = self.ffdata.keys() & cofactor_data["ffdata"].keys() - set([
