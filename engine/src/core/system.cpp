@@ -177,7 +177,7 @@ static std::string to_string(const std::vector<nonbonded_atom_pair>& pairs,
             << prefix << "    \"c6\": " << item.c6 << "," << std::endl
             << prefix << "    \"c12\": " << item.c12 << "," << std::endl
             << prefix << "    \"qq\": " << item.qq << std::endl
-            << "}," << std::endl;
+            << prefix << "  }," << std::endl;
     }
     oss << prefix + "]";
     return oss.str();
