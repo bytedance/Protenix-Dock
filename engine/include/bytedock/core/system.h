@@ -120,7 +120,12 @@ struct force_field_params {
 struct atom_position {
     param_t xyz[3];
 };
+
+#ifdef ENABLE_SIMD_AVX2
 typedef simd_vector<atom_position> molecule_pose;
+#else
+typedef std::vector<atom_position> molecule_pose;
+#endif
 
 struct rigid_group {
     /**
