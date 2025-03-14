@@ -104,14 +104,16 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
     // Prepare initial conformer
     if (in.pose_id == 0) {
         out.ligand_xyz = in.ligand->get_pose(0);  // Copy
-    } else {
-        size_t current_candidate_idx = 0;
+    } else {  // in.pose_id > 0
+        size_t source_idx = 0;
         if (in.ligand->get_nposes() > in.pose_id) {
-            current_candidate_idx = in.pose_id;
-            LOG_WARNING << "Monte-Carlo searcher randomize init pose from pose_id:" << current_candidate_idx;
+            source_idx = in.pose_id;
+        } else {
+            LOG_DEBUG << "Monte-Carlo searcher#" << in.pose_id
+                      << " will generate the initial conformer from the " << source_idx
+                      << "-th pose in the ligand file";
         }
-        out.ligand_xyz = randomize(*in.ligand, current_candidate_idx, *in.receptor, rg);  // Move
-
+        out.ligand_xyz = randomize(*in.ligand, source_idx, *in.receptor, rg);  // Move
     }
     out.torsions.resize(in.receptor->num_torsions(), 0_r);
     binding_system_interactions model(in.receptor, in.ligand, in.cache);

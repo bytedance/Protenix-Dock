@@ -171,10 +171,10 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
     blocking_queue<name_and_task> parsed_queue(nworkers_*2, eoq_task, nreaders_);
     std::vector<std::thread> readers;
     for (size_t i = 0; i < nreaders_; i++) {
-        readers.emplace_back([&origin, &inf_queue, &parsed_queue]() {
+        readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            multi_pose_reader one(origin, inf_queue);
+            ligand_pose_reader one(origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -236,10 +236,10 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
     blocking_queue<name_and_task> parsed_queue(nworkers_*2, eoq_task, nreaders_);
     std::vector<std::thread> readers;
     for (size_t i = 0; i < nreaders_; i++) {
-        readers.emplace_back([&origin, &inf_queue, &parsed_queue]() {
+        readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            multi_pose_reader one(origin, inf_queue);
+            ligand_pose_reader one(origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -359,10 +359,10 @@ void ReusableEngine::search(const std::string& ligand_index_file,
     blocking_queue<name_and_task> parsed_queue(nworkers_*2, eoq_task, nreaders_);
     std::vector<std::thread> readers;
     for (size_t i = 0; i < nreaders_; i++) {
-        readers.emplace_back([&origin, exhaustiveness, &inf_queue, &parsed_queue]() {
+        readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            single_pose_reader one(origin, exhaustiveness, inf_queue);
+            ligand_pose_reader one(origin, inf_queue, exhaustiveness);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
