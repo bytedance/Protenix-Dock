@@ -44,6 +44,9 @@ void ligand_pose_reader::handle_json_file(
         return;
     }
 
+    // Precalculate coefficients for nonbonded terms in pscore
+    auto pscorer = std::make_shared<root_scorer>(sf_mgr_.get_pose_selection());
+
     // Used by `mc_prune_energy_threshold` in Monte-Carlo searching
     auto file_name = get_file_name(path);
     global_energy_info[file_name] = {
@@ -60,6 +63,7 @@ void ligand_pose_reader::handle_json_file(
         docking_task task(task_templ_);  // Copy
         task.feed.ligand = ligand;
         task.feed.pose_id = i;
+        task.feed.pscorer = pscorer;
         parsed_queue.push({std::move(name), std::move(task)});
     }
 }

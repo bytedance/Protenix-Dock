@@ -47,6 +47,7 @@ void pose_aggregator::fill(blocking_queue<name_and_batch>& ligand_queue) {
             auto& batch = store_[name];  // Create a new entry
             batch.receptor = task.feed.receptor;
             batch.ligand = task.feed.ligand;
+            batch.pscorer = task.feed.pscorer;
             batch.candidates.resize(nposes);
             batch.bscore = 1e8_r;  // Indicate it is invalid
         }

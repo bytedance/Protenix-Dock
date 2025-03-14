@@ -178,10 +178,11 @@ bool pose_cluster::preprocess(pose_batch& aggregated, bool include_bscore) {
 
 bool pose_ranker::preprocess(pose_batch& aggregated, bool include_bscore) {
     auto& candidates = aggregated.candidates;  // At least 1 pose
-    auto& pp = sf_mgr_.get_pose_selection();
     auto& receptor_ffdata = aggregated.receptor->get_ffdata();
     auto& ligand_ffdata = aggregated.ligand->get_ffdata();
 
+    // Calculate pscores & rank poses
+    auto& pp = *(aggregated.pscorer);
     size_t best_id;
     instant_cache tmp, memo;
     for (size_t i = 0; i < candidates.size(); ++i) {
@@ -197,6 +198,8 @@ bool pose_ranker::preprocess(pose_batch& aggregated, bool include_bscore) {
         }
     }
     aggregated.best_id = best_id;
+
+    // Tell bsocre of the best pose
     if (include_bscore) {
         step_timer t(EVALUATE_AFFINITY_SCORE_STEP);
         auto& bb = sf_mgr_.get_affinity_ranking();

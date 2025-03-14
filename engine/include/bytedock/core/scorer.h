@@ -55,12 +55,12 @@ public:
 
 protected:
     // Ownership of the pointer is transferred as well
-    void add_child(abstract_scorer* scorer) {
-        children_.push_back(std::unique_ptr<abstract_scorer>(scorer));
+    void add_child(std::shared_ptr<abstract_scorer> scorer) {
+        children_.push_back(scorer);
     }
 
 private:
-    std::vector<std::unique_ptr<abstract_scorer> > children_;
+    std::vector<std::shared_ptr<abstract_scorer> > children_;
 };
 
 class leaf_scorer : public abstract_scorer {
@@ -125,6 +125,11 @@ public:
                                const molecule_pose& ligand_xyz,
                                const force_field_params& ligand_ffdata) const;
 
+    // Used for randomizing the initial pose in Monte-Carlo search
+    const leaf_scorer& get_inter_molecular_vdw_energy() {
+        return *inter_molecular_vdw_energy_;
+    }
+
 protected:
     void add_coefficient(const std::string& name, param_t value) {
         coefficients_[name] = value;
@@ -133,6 +138,7 @@ protected:
 private:
     const std::string sf_name_;  // For debug
     std::unordered_map<std::string, param_t> coefficients_;
+    std::shared_ptr<leaf_scorer> inter_molecular_vdw_energy_;  // Never empty!
 };
 
 class mm_interaction_vdw_energy : public leaf_scorer {

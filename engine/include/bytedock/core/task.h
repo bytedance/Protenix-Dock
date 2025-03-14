@@ -18,6 +18,7 @@
 #pragma once
 
 #include "bytedock/core/grid.h"
+#include "bytedock/core/scorer.h"
 #include "bytedock/lib/error.h"
 
 namespace bytedock {
@@ -27,6 +28,7 @@ struct binding_input {
     std::shared_ptr<receptor_cache> cache;  // Could be empty!!!
     std::shared_ptr<free_ligand> ligand;
     index_t pose_id;  // Slice of field `ligand.poses_`
+    std::shared_ptr<root_scorer> pscorer;
 };
 
 struct optimized_result {
@@ -69,9 +71,10 @@ struct evaluation_task {
 struct pose_batch {
     std::shared_ptr<torsional_receptor> receptor;
     std::shared_ptr<free_ligand> ligand;
+    std::shared_ptr<root_scorer> pscorer;
+    std::vector<optimized_result> candidates;
     index_t best_id;  // Whose pscore is the lowest
     param_t bscore;  // For the best pose
-    std::vector<optimized_result> candidates;
 };
 
 typedef std::pair<std::string, docking_task> name_and_task;

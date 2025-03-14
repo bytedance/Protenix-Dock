@@ -19,6 +19,7 @@
 
 #include <string>
 
+#include "bytedock/core/factory.h"
 #include "bytedock/core/task.h"
 #include "bytedock/lib/queue.h"
 
@@ -27,10 +28,12 @@ namespace bytedock {
 class ligand_pose_reader {
 public:
     ligand_pose_reader(
+        const scoring_function_factory& sf_manager,
         const docking_task& task_templ,
         blocking_queue<std::string>& file_queue,
         size_t max_ntasks = 0  // Zero means no limitation
-    ): task_templ_(task_templ), file_queue_(file_queue), max_ntasks_(max_ntasks) {}
+    ): sf_mgr_(sf_manager), task_templ_(task_templ),
+       file_queue_(file_queue), max_ntasks_(max_ntasks) {}
 
     void fill(blocking_queue<name_and_task>& parsed_queue);
 
@@ -38,6 +41,7 @@ private:
     void handle_json_file(const std::string& path,
                           blocking_queue<name_and_task>& parsed_queue);
 
+    const scoring_function_factory& sf_mgr_;
     const docking_task& task_templ_;
     const size_t max_ntasks_;
     blocking_queue<std::string>& file_queue_;

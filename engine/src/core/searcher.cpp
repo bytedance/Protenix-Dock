@@ -45,7 +45,8 @@ void monte_carlo_searcher::fill(blocking_queue<name_and_task>& out_queue) {
 
 molecule_pose monte_carlo_searcher::randomize(
     const free_ligand& ligand, const size_t pose_id,
-    const torsional_receptor& receptor, random_generator& rdgen
+    const torsional_receptor& receptor,
+    const leaf_scorer& vdw_calc, random_generator& rdgen
 ) {
     atom_position new_center;
     vector_4d quaternion;
@@ -73,8 +74,8 @@ molecule_pose monte_carlo_searcher::randomize(
         if (num < 2000 && !check_all_atoms_in_box(candidate)) continue;
         if (!check_geometric_center_in_box(candidate)) continue;
         if (num > 1999 ||
-            vdw_calc_->report(receptor_xyz, receptor_ffdata,
-                              candidate, ligand_ffdata) < 100_r) break;
+            vdw_calc.report(receptor_xyz, receptor_ffdata,
+                            candidate, ligand_ffdata) < 100_r) break;
     }
     LOG_DEBUG << "New center for intial conformer: [" << new_center.xyz[0]
             << ", " << new_center.xyz[1] << ", " << new_center.xyz[2] << "]";
@@ -98,6 +99,8 @@ inline bool check_ligand_xyz(const molecule_pose& coords) {
 bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_result& out) {
     random_generator rg(seed_ + in.pose_id);
     out.offset = in.pose_id;
+    auto& pp = *(in.pscorer);
+
     auto& receptor_ffdata = in.receptor->get_ffdata();
     auto& ligand_ffdata = in.ligand->get_ffdata();
     std::string current_ligand_name = out.name;
@@ -113,13 +116,13 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
                       << " will generate the initial conformer from the " << source_idx
                       << "-th pose in the ligand file";
         }
-        out.ligand_xyz = randomize(*in.ligand, source_idx, *in.receptor, rg);  // Move
+        out.ligand_xyz = randomize(*in.ligand, source_idx, *in.receptor,
+                                   pp.get_inter_molecular_vdw_energy(), rg);  // Move
     }
     out.torsions.resize(in.receptor->num_torsions(), 0_r);
     binding_system_interactions model(in.receptor, in.ligand, in.cache);
     bool converged = full_step_.apply(model, out);
     out.receptor_xyz = in.receptor->apply_parameters(out.torsions);  // Move
-    auto& pp = sf_mgr_.get_pose_selection();
     out.pscore = pp.combine(out.receptor_xyz, receptor_ffdata,
                             out.ligand_xyz, ligand_ffdata);  // `out` is the best
     if (in.pose_id == 0) return converged;  // Walker 0 disables Monte-Carlo searching

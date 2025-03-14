@@ -174,7 +174,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
         readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            ligand_pose_reader one(origin, inf_queue);
+            ligand_pose_reader one(sf_mgr_, origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -239,7 +239,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
         readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            ligand_pose_reader one(origin, inf_queue);
+            ligand_pose_reader one(sf_mgr_, origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -362,7 +362,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
         readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            ligand_pose_reader one(origin, inf_queue, exhaustiveness);
+            ligand_pose_reader one(sf_mgr_, origin, inf_queue, exhaustiveness);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -375,7 +375,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
         searchers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_INFO << "Searcher has started...";
-            monte_carlo_searcher one(sf_mgr_, bc_, seed, max_nsteps, relax_nsteps,
+            monte_carlo_searcher one(bc_, seed, max_nsteps, relax_nsteps,
                                      mc_mmenergy_threshold, parsed_queue);
             one.fill(pose_queue);
             LOG_INFO << "Searcher has ended.";

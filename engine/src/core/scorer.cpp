@@ -50,67 +50,89 @@ std::unordered_map<std::string, param_t> leaf_scorer::summary(
     return scores;
 }
 
+class zero_energy : public leaf_scorer {
+public:
+    zero_energy() : leaf_scorer("Zero_Energy") {}
+
+    param_t report(
+        const molecule_pose& receptor_xyz,
+        const force_field_params& receptor_ffdata,
+        const molecule_pose& ligand_xyz,
+        const force_field_params& ligand_ffdata,
+        const instant_cache* pose_memo = nullptr
+    ) const override {
+        return 0_r;
+    }
+};
+
 root_scorer::root_scorer(
     const std::string& name, const ScoringFunctionParams& sfp
 ) : sf_name_(name) {
     if CHECK_PARAMETER_NON_ZERO(sfp.interaction_coulomb_energy_coef) {
         add_coefficient("InteractionCoulomb_oriEnergy",
                         sfp.interaction_coulomb_energy_coef);
-        add_child(new mm_interaction_coulomb_energy("InteractionCoulomb_oriEnergy"));
+        add_child(std::make_shared<mm_interaction_coulomb_energy>(
+            "InteractionCoulomb_oriEnergy"
+        ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.interaction_vdw_energy_coef) {
         add_coefficient("InteractionVDW_Energy",
                         sfp.interaction_vdw_energy_coef);
-        add_child(new mm_interaction_vdw_energy(
+        inter_molecular_vdw_energy_ = std::make_shared<mm_interaction_vdw_energy>(
             "InteractionVDW_Energy", sfp.interaction_vdw_energy
-        ));
+        );
+        add_child(inter_molecular_vdw_energy_);
+    } else {
+        inter_molecular_vdw_energy_ = std::make_shared<zero_energy>();
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.ionic_energy_coef) {
         add_coefficient("Ionic_Energy", sfp.ionic_energy_coef);
-        add_child(new ionic_interaction_total_energy(
+        add_child(std::make_shared<ionic_interaction_total_energy>(
             "Ionic_Energy", sfp.ionic_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.pi_cationic_energy_coef) {
         add_coefficient("Pi_Cationic_Energy", sfp.pi_cationic_energy_coef);
-        add_child(new cation_pi_interaction_total_energy(
+        add_child(std::make_shared<cation_pi_interaction_total_energy>(
             "Pi_Cationic_Energy", sfp.pi_cationic_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.f2f_pi_stacking_energy_coef) {
         add_coefficient("F2FPiStacking_Energy", sfp.f2f_pi_stacking_energy_coef);
-        add_child(new pi_stacking_total_energy(
+        add_child(std::make_shared<pi_stacking_total_energy>(
             "F2FPiStacking_Energy", 0_r, sfp.f2f_pi_stacking_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.e2f_pi_stacking_energy_coef) {
         add_coefficient("E2FPiStacking_Energy", sfp.e2f_pi_stacking_energy_coef);
-        add_child(new pi_stacking_total_energy(
+        add_child(std::make_shared<pi_stacking_total_energy>(
             "E2FPiStacking_Energy", 90_r, sfp.e2f_pi_stacking_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.hbond_energy_coef) {
         add_coefficient("Hbond_Energy", sfp.hbond_energy_coef);
-        add_child(new hbond_energy("Hbond_Energy", sfp.hbond_energy));
+        add_child(std::make_shared<hbond_energy>("Hbond_Energy", sfp.hbond_energy));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.hydrophobic_energy_coef) {
         add_coefficient("Hydrophobic_Energy", sfp.hydrophobic_energy_coef);
-        add_child(new hydrophobic_energy(
+        add_child(std::make_shared<hydrophobic_energy>(
             "Hydrophobic_Energy", sfp.hydrophobic_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.torsion_strain_penalty_coef) {
         add_coefficient("TorsionStrain_Penalty", sfp.torsion_strain_penalty_coef);
-        add_child(new torsion_strain_penalty_scorer("TorsionStrain_Penalty"));
+        add_child(std::make_shared<torsion_strain_penalty_scorer>(
+            "TorsionStrain_Penalty"
+        ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.rotatable_energy_coef) {
         add_coefficient("Rotatable_Energy", sfp.rotatable_energy_coef);
-        add_child(new rotatable_energy("Rotatable_Energy"));
+        add_child(std::make_shared<rotatable_energy>("Rotatable_Energy"));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.gbsa_energy_delta_coef) {
         add_coefficient("Gbsa_Com_Energy-Gbsa_Lig_Energy-Gbsa_Pro_Energy",
                         sfp.gbsa_energy_delta_coef);
-        add_child(new gbsa_total_energy);
+        add_child(std::make_shared<gbsa_total_energy>());
     }
 }
 
