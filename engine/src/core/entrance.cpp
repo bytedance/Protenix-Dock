@@ -174,7 +174,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
         readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            ligand_pose_reader one(sf_mgr_, origin, inf_queue);
+            ligand_pose_reader one(sf_mgr_, include_bscore, origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -188,7 +188,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
         evaluators.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_INFO << "Evaluator has started...";
-            scoring_evaluator one(sf_mgr_, include_bscore, parsed_queue);
+            scoring_evaluator one(parsed_queue);
             one.fill(pose_queue);
             LOG_INFO << "Evaluator has ended.";
         });
@@ -239,7 +239,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
         readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            ligand_pose_reader one(sf_mgr_, origin, inf_queue);
+            ligand_pose_reader one(sf_mgr_, true, origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -283,7 +283,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
         writers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Writer has started...";
-            pose_ranker one(sf_mgr_, include_bscore, output_dir, ligand_queue);
+            pose_ranker one(output_dir, ligand_queue);
             one.fill(outf_queue);
             LOG_DEBUG << "Writer has ended.";
         });
@@ -362,7 +362,8 @@ void ReusableEngine::search(const std::string& ligand_index_file,
         readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            ligand_pose_reader one(sf_mgr_, origin, inf_queue, exhaustiveness);
+            ligand_pose_reader one(sf_mgr_, include_bscore,
+                                   origin, inf_queue, exhaustiveness);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -404,7 +405,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
         writers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Writer has started...";
-            pose_cluster one(sf_mgr_, num_modes, min_rmsd, include_bscore,
+            pose_cluster one(num_modes, min_rmsd,
                              output_dir, ligand_queue);
             one.fill(outf_queue);
             LOG_DEBUG << "Writer has ended.";

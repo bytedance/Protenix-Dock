@@ -230,8 +230,8 @@ scoring_function_factory::scoring_function_factory(const std::string& config_pat
         fin = open_for_read(config_path);
     }
     parse_scoring_function_config(fin, sf_config_);
-    LOG_DEBUG << "pscore = " << to_string(sf_config_.pose_selection);
-    LOG_DEBUG << "bscore = " << to_string(sf_config_.affinity_ranking);
+    LOG_DEBUG << "pscorer = " << to_string(sf_config_.pose_selection);
+    LOG_DEBUG << "bscorer = " << to_string(sf_config_.affinity_ranking);
     pose_scorer_ = std::make_shared<root_scorer>("pscore", sf_config_.pose_selection);
     affinity_scorer_ = std::make_shared<root_scorer>("bscore",
                                                      sf_config_.affinity_ranking);

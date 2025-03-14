@@ -29,6 +29,7 @@ struct binding_input {
     std::shared_ptr<free_ligand> ligand;
     index_t pose_id;  // Slice of field `ligand.poses_`
     std::shared_ptr<root_scorer> pscorer;
+    std::shared_ptr<root_scorer> bscorer;
 };
 
 struct optimized_result {
@@ -72,9 +73,10 @@ struct pose_batch {
     std::shared_ptr<torsional_receptor> receptor;
     std::shared_ptr<free_ligand> ligand;
     std::shared_ptr<root_scorer> pscorer;
+    std::shared_ptr<root_scorer> bscorer;
     std::vector<optimized_result> candidates;
     index_t best_id;  // Whose pscore is the lowest
-    param_t bscore;  // For the best pose
+    param_t best_bscore;
 };
 
 typedef std::pair<std::string, docking_task> name_and_task;
