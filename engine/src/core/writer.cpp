@@ -177,34 +177,19 @@ bool pose_cluster::preprocess(pose_batch& aggregated) {
 
 bool pose_ranker::preprocess(pose_batch& aggregated) {
     auto& candidates = aggregated.candidates;  // At least 1 pose
-    auto& receptor_ffdata = aggregated.receptor->get_ffdata();
-    auto& ligand_ffdata = aggregated.ligand->get_ffdata();
-
-    // Calculate pscores & rank poses
-    auto& pp = *(aggregated.pscorer);
     size_t best_id;
-    instant_cache tmp, memo;
     for (size_t i = 0; i < candidates.size(); ++i) {
-        auto& cdd = candidates[i];
-        step_timer t(EVALUATE_FAST_SCORE_STEP);
-        memo = pp.precalculate(cdd.receptor_xyz, receptor_ffdata,
-                               cdd.ligand_xyz, ligand_ffdata);  // Swap
-        cdd.pscore = pp.combine(cdd.receptor_xyz, receptor_ffdata,
-                                cdd.ligand_xyz, ligand_ffdata, memo);
-        if (i == 0 || cdd.pscore < candidates[best_id].pscore) {
+        if (i == 0 || candidates[i].pscore < candidates[best_id].pscore) {
             best_id = i;
-            tmp = std::move(memo);
         }
     }
     aggregated.best_id = best_id;
-
-    // Tell bsocre of the best pose
     if (aggregated.bscorer) {
         step_timer t(EVALUATE_AFFINITY_SCORE_STEP);
-        auto& best_pose = candidates[best_id];
+        auto& best_pose = candidates[aggregated.best_id];
         aggregated.best_bscore = (aggregated.bscorer)->combine(
-            best_pose.receptor_xyz, receptor_ffdata,
-            best_pose.ligand_xyz, ligand_ffdata, tmp
+            best_pose.receptor_xyz, aggregated.receptor->get_ffdata(),
+            best_pose.ligand_xyz, aggregated.ligand->get_ffdata()
         );
     }
     return true;

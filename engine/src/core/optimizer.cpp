@@ -32,6 +32,11 @@ bool serial_optimizer::minimize_energy(binding_input& in, optimized_result& out)
     bool converged = step_.apply(model, out);
     out.receptor_xyz = in.receptor->apply_parameters(out.torsions);  // Move
     out.offset = in.pose_id;
+    {
+        step_timer t(EVALUATE_FAST_SCORE_STEP);
+        out.pscore = in.pscorer->combine(out.receptor_xyz, in.receptor->get_ffdata(),
+                                         out.ligand_xyz, in.ligand->get_ffdata());
+    }
     return converged;
 }
 

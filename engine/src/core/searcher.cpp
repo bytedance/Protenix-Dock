@@ -123,8 +123,11 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
     binding_system_interactions model(in.receptor, in.ligand, in.cache);
     bool converged = full_step_.apply(model, out);
     out.receptor_xyz = in.receptor->apply_parameters(out.torsions);  // Move
-    out.pscore = pp.combine(out.receptor_xyz, receptor_ffdata,
-                            out.ligand_xyz, ligand_ffdata);  // `out` is the best
+    {
+        step_timer t(EVALUATE_FAST_SCORE_STEP);
+        out.pscore = pp.combine(out.receptor_xyz, receptor_ffdata,
+                                out.ligand_xyz, ligand_ffdata);  // `out` is the best
+    }
     if (in.pose_id == 0) return converged;  // Walker 0 disables Monte-Carlo searching
 
     std::vector<param_t> tmp_torsion_gradient;
@@ -164,8 +167,11 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
             converged = fast_step_.apply(model, cdd);
             total_nevals += cdd.nevals;
             cdd.receptor_xyz = in.receptor->apply_parameters(cdd.torsions);  // Move
-            cdd.pscore = pp.combine(cdd.receptor_xyz, receptor_ffdata,
-                                    cdd.ligand_xyz, ligand_ffdata);
+            {
+                step_timer t(EVALUATE_FAST_SCORE_STEP);
+                cdd.pscore = pp.combine(cdd.receptor_xyz, receptor_ffdata,
+                                        cdd.ligand_xyz, ligand_ffdata);
+            }
             if ((step == 0 || metropolis_accept(tmp.pscore, cdd.pscore, rg)) &&
                 check_all_atoms_in_box(cdd.ligand_xyz)) {
                 tmp = std::move(cdd);
@@ -173,8 +179,11 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
                     converged = full_step_.apply(model, tmp);
                     total_nevals += tmp.nevals;
                     tmp.receptor_xyz = in.receptor->apply_parameters(tmp.torsions);
-                    tmp.pscore = pp.combine(tmp.receptor_xyz, receptor_ffdata,
-                                            tmp.ligand_xyz, ligand_ffdata);
+                    {
+                        step_timer t(EVALUATE_FAST_SCORE_STEP);
+                        tmp.pscore = pp.combine(tmp.receptor_xyz, receptor_ffdata,
+                                                tmp.ligand_xyz, ligand_ffdata);
+                    }
                     if (tmp.pscore < out.pscore) out = tmp;  // Copy
                 }
             }

@@ -239,7 +239,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
         readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            ligand_pose_reader one(sf_mgr_, true, origin, inf_queue);
+            ligand_pose_reader one(sf_mgr_, include_bscore, origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });

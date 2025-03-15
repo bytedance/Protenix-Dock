@@ -53,8 +53,13 @@ public:
         const instant_cache* pose_memo = nullptr
     ) const;
 
+    // Enable precalculation on force field parameters
     virtual void bind_to_system(const force_field_params& receptor_ffdata,
-                                const force_field_params& ligand_ffdata) {}
+                                const force_field_params& ligand_ffdata) {
+        for (auto& scorer: children_) {
+            scorer->bind_to_system(receptor_ffdata, ligand_ffdata);
+        }
+    }
 
 protected:
     // Ownership of the pointer is transferred as well
