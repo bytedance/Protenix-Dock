@@ -79,7 +79,9 @@ public:
                            const force_field_params& receptor_ffdata,
                            const molecule_pose& ligand_xyz,
                            const force_field_params& ligand_ffdata,
-                           const instant_cache* pose_memo = nullptr) const = 0;
+                           const instant_cache* pose_memo = nullptr) const {
+        return 0_r;
+    }
 
 private:
     const std::string name_;
@@ -145,7 +147,7 @@ class mm_interaction_vdw_energy : public leaf_scorer {
 public:
     mm_interaction_vdw_energy(const std::string& name);
     mm_interaction_vdw_energy(const std::string& name,
-                                      const InteractionVdwEnergyParams& params);
+                              const InteractionVdwEnergyParams& params);
 
     param_t report(
         const molecule_pose& receptor_xyz,
@@ -227,8 +229,8 @@ private:
 
     param_t lc_coef_;
     param_t pc_coef_;
-    std::unique_ptr<ionic_interaction_batch> lc_inter_;
-    std::unique_ptr<ionic_interaction_batch> pc_inter_;
+    std::shared_ptr<ionic_interaction_batch> lc_inter_;
+    std::shared_ptr<ionic_interaction_batch> pc_inter_;
 };
 
 class cation_pi_interaction_total_energy : public leaf_scorer {
@@ -267,10 +269,10 @@ private:
     param_t lc6_coef_;
     param_t pc5_coef_;
     param_t pc6_coef_;
-    std::unique_ptr<cation_pi_interaction_batch> lc5_inter_;
-    std::unique_ptr<cation_pi_interaction_batch> lc6_inter_;
-    std::unique_ptr<cation_pi_interaction_batch> pc5_inter_;
-    std::unique_ptr<cation_pi_interaction_batch> pc6_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> lc5_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> lc6_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> pc5_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> pc6_inter_;
 };
 
 class hbond_energy : public leaf_scorer {
@@ -318,14 +320,14 @@ private:
     param_t hpdcn_coef_;
     param_t hpdnc_coef_;
     param_t hpdnn_coef_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldcc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldcn_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldnc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldnn_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdcc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdcn_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdnc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdnn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldcc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldcn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldnc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldnn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdcc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdcn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdnc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdnn_inter_;
 };
 
 class torsion_strain_penalty_scorer : public leaf_scorer {
@@ -383,10 +385,10 @@ protected:
     param_t l5r6_coef_;
     param_t l6r5_coef_;
     param_t l6r6_coef_;
-    std::unique_ptr<pi_stacking_batch> l5r5_inter_;
-    std::unique_ptr<pi_stacking_batch> l5r6_inter_;
-    std::unique_ptr<pi_stacking_batch> l6r5_inter_;
-    std::unique_ptr<pi_stacking_batch> l6r6_inter_;
+    std::shared_ptr<pi_stacking_batch> l5r5_inter_;
+    std::shared_ptr<pi_stacking_batch> l5r6_inter_;
+    std::shared_ptr<pi_stacking_batch> l6r5_inter_;
+    std::shared_ptr<pi_stacking_batch> l6r6_inter_;
 };
 
 class rotatable_energy : public leaf_scorer {

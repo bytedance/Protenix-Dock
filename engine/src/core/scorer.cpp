@@ -50,21 +50,6 @@ std::unordered_map<std::string, param_t> leaf_scorer::summary(
     return scores;
 }
 
-class zero_energy : public leaf_scorer {
-public:
-    zero_energy() : leaf_scorer("Zero_Energy") {}
-
-    param_t report(
-        const molecule_pose& receptor_xyz,
-        const force_field_params& receptor_ffdata,
-        const molecule_pose& ligand_xyz,
-        const force_field_params& ligand_ffdata,
-        const instant_cache* pose_memo = nullptr
-    ) const override {
-        return 0_r;
-    }
-};
-
 root_scorer::root_scorer(
     const std::string& name, const ScoringFunctionParams& sfp
 ) : sf_name_(name) {
@@ -83,7 +68,7 @@ root_scorer::root_scorer(
         );
         add_child(inter_molecular_vdw_energy_);
     } else {
-        inter_molecular_vdw_energy_ = std::make_shared<zero_energy>();
+        inter_molecular_vdw_energy_ = std::make_shared<leaf_scorer>("Zero_Energy");
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.ionic_energy_coef) {
         add_coefficient("Ionic_Energy", sfp.ionic_energy_coef);
