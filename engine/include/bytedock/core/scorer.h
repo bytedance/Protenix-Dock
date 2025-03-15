@@ -53,6 +53,9 @@ public:
         const instant_cache* pose_memo = nullptr
     ) const;
 
+    virtual void bind_to_system(const force_field_params& receptor_ffdata,
+                                const force_field_params& ligand_ffdata) {}
+
 protected:
     // Ownership of the pointer is transferred as well
     void add_child(std::shared_ptr<abstract_scorer> scorer) {
@@ -145,7 +148,6 @@ private:
 
 class mm_interaction_vdw_energy : public leaf_scorer {
 public:
-    mm_interaction_vdw_energy(const std::string& name);
     mm_interaction_vdw_energy(const std::string& name,
                               const InteractionVdwEnergyParams& params);
 
@@ -157,12 +159,25 @@ public:
         const instant_cache* pose_memo = nullptr
     ) const override;
 
+    void bind_to_system(const force_field_params& receptor_ffdata,
+                        const force_field_params& ligand_ffdata) override;
+
 private:
     param_t scale_;
     param_t energy_cutoff_;
 
     // It is enabled by option `adopt_tuned_ligvdw_params=True` in pscore settings
     lj_vdw scaled_vdw_types_[kNumVdwTypes];
+
+    /**
+     * It contains all atom pairs between receptor and ligand. In result, its shape is
+     * [num_ligand_atoms, num_receptor_atoms].
+     *
+     * If receptor has 5000 atoms and ligand has 100 atoms, 8 MB storage is needed for
+     * double precision. Thus, it won't be a big problem for most protein-ligand
+     * docking tasks.
+     */
+    std::vector<lj_vdw> inter_molecular_pairs_;
 };
 
 class mm_interaction_coulomb_energy : public leaf_scorer {

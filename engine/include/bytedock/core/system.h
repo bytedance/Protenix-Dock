@@ -63,8 +63,8 @@ struct atom_pair {
 };
 
 struct lj_vdw {
-    param_t sigma;
-    param_t epsilon;
+    param_t sigma;  // Or c6
+    param_t epsilon;  // Or c12
 };
 
 struct nonbonded_atom_pair {

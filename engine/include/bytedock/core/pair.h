@@ -35,6 +35,14 @@ inline void precalculate_vdw_pair(const lj_vdw* type_i, const lj_vdw* type_j,
     item.c12 = item.c6 * sigma6;
 }
 
+inline void precalculate_vdw_pair(const lj_vdw& type_i, const lj_vdw& type_j,
+                                  lj_vdw& item) {
+    param_t sigma6 = std::pow((type_i.sigma + type_j.sigma) * 0.5_r, 6_r);
+    item.sigma = 4_r * std::sqrt(type_i.epsilon * type_j.epsilon) * sigma6;  // ->c6
+    item.epsilon = item.sigma * sigma6;  // ->c12
+}
+
+// Used in `self_nonbonded_interactions::put_gradients(...)`
 inline param_t calculate_coul_pair(const param_t qq,
                                    const param_t* r_ij,
                                    const param_t ir,  // 1/distance
@@ -50,6 +58,7 @@ inline param_t calculate_coul_pair(const param_t qq,
     return qqk * ir;
 }
 
+// Used in `receptor_cache::partial_worker::populate(...)`
 inline param_t calculate_coul_pair(const param_t qi,
                                    const param_t qj,
                                    const param_t* r_ij,
@@ -66,6 +75,7 @@ inline param_t calculate_coul_pair(const param_t qi,
     return safe_divide(qi_qj, distance) * kCoulombFactor;
 }
 
+// Used in `self_nonbonded_interactions::put_gradients(...)`
 inline param_t calculate_vdw_pair(const param_t c6,
                                   const param_t c12,
                                   const param_t* r_ij,
@@ -85,6 +95,7 @@ inline param_t calculate_vdw_pair(const param_t c6,
     return u12 - u6;
 }
 
+// Used in `receptor_cache::partial_worker::populate(...)`
 inline param_t calculate_vdw_pair(const lj_vdw& type_i,
                                   const lj_vdw& type_j,
                                   const param_t* r_ij,
@@ -103,6 +114,17 @@ inline param_t calculate_vdw_pair(const lj_vdw& type_i,
     minus_inplace_3d(grad_i.xyz, grad);
     add_inplace_3d(grad_j.xyz, grad);
     return (u12 - u6) * fused;
+}
+
+// Used in `mm_interaction_vdw_energy::report(...)`
+inline param_t calculate_vdw_pair(const param_t c6, const param_t c12,
+                                  const param_t distance, const param_t cutoff) {
+    param_t ir = safe_divide(1_r, distance);
+    param_t ir2 = MATH_SQUARE_SCALAR(ir);
+    param_t ir6 = MATH_CUBE_SCALAR(ir2);
+    ir = c6 * ir6;  // Used as `u6`
+    ir2 = c12 * MATH_SQUARE_SCALAR(ir6);  // Used as `u12`
+    return clamp(ir2 - ir, -cutoff, cutoff);
 }
 
 #ifdef ENABLE_SIMD_AVX2

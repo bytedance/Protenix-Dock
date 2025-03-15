@@ -17,6 +17,7 @@
 
 #include "bytedock/core/scorer.h"
 
+#include "bytedock/core/pair.h"
 #include "bytedock/lib/utility.h"
 
 namespace bytedock {
@@ -191,7 +192,7 @@ instant_cache root_scorer::precalculate(
         const atom_position& xyz1 = ligand_xyz[i];
         for (size_t j = 0; j < receptor_xyz.size(); j++) {
             memo.distance_map[offset] = get_distance_3d(xyz1.xyz, receptor_xyz[j].xyz);
-            offset++;
+            ++offset;
         }
     }
     memo.receptor_ring5_centroids = get_ring_centroids(receptor_xyz,
@@ -226,6 +227,24 @@ mm_interaction_vdw_energy::mm_interaction_vdw_energy(
 
 #define FROM_2D_INDEX(idx, idy, dimy) ((idx)*(dimy)+(idy))
 
+void mm_interaction_vdw_energy::bind_to_system(
+    const force_field_params& receptor_ffdata,
+    const force_field_params& ligand_ffdata
+) {
+    auto& rvdw_params = receptor_ffdata.vdw_params;
+    auto& lvdw_types = ligand_ffdata.vdw_types;
+    inter_molecular_pairs_.resize(rvdw_params.size() * lvdw_types.size());
+    size_t offset = 0;  // The enumeration sequence is compatible with `FROM_2D_INDEX`
+    for (size_t i = 0; i < lvdw_types.size(); ++i) {
+        const lj_vdw& type1 = scaled_vdw_types_[lvdw_types[i]];
+        for (size_t j = 0; j < rvdw_params.size(); ++j) {
+            precalculate_vdw_pair(type1, rvdw_params[j],
+                                  inter_molecular_pairs_[offset]);
+            ++offset;
+        }
+    }
+}
+
 param_t mm_interaction_vdw_energy::report(
     const molecule_pose& receptor_xyz,
     const force_field_params& receptor_ffdata,
@@ -233,26 +252,22 @@ param_t mm_interaction_vdw_energy::report(
     const force_field_params& ligand_ffdata,
     const instant_cache* pose_memo
 ) const {
-    param_t energy = 0.;
-    param_t distance, sigma1, epsilon1, fused, u6;
+    if (inter_molecular_pairs_.size() == 0) throw std::runtime_error(
+        "Please call mm_interaction_vdw_energy.bind_to_system(...) first!"
+    );
+    param_t energy = 0_r, distance;
+    size_t offset = 0;
     for (size_t i = 0; i < ligand_xyz.size(); i++) {
-        const lj_vdw& type1 = scaled_vdw_types_[ligand_ffdata.vdw_types[i]];
-        sigma1 = type1.sigma;
-        epsilon1 = type1.epsilon;
         for (size_t j = 0; j < receptor_xyz.size(); j++) {
-            const lj_vdw& type2 = receptor_ffdata.vdw_params[j];
+            const auto& fused = inter_molecular_pairs_[offset];
             if (pose_memo == nullptr) {
                 distance = get_distance_3d(ligand_xyz[i].xyz, receptor_xyz[j].xyz);
             } else {
-                distance = pose_memo->distance_map[
-                    FROM_2D_INDEX(i, j, receptor_xyz.size())
-                ];
+                distance = pose_memo->distance_map[offset];
             }
-            fused = (sigma1 + type2.sigma) * 0.5_r;
-            u6 = std::pow(safe_divide(fused, distance), 6_r);
-            fused = std::sqrt(epsilon1 * type2.epsilon) * 4_r;
-            distance = (MATH_SQUARE_SCALAR(u6) - u6) * fused; // Used as `tmp`
-            energy += clamp(distance, -energy_cutoff_, energy_cutoff_);
+            energy += calculate_vdw_pair(fused.sigma, fused.epsilon,  // c6 & c12
+                                         distance, energy_cutoff_);
+            ++offset;
         }
     }
     return energy * scale_;
@@ -264,19 +279,19 @@ param_t mm_interaction_coulomb_energy::report(
     const instant_cache* pose_memo
 ) const {
     param_t energy = 0., distance, q1;
+    size_t offset = 0;
     for (size_t i = 0; i < ligand_xyz.size(); i++) {
         q1 = ligand_ffdata.partial_charges[i];
         for (size_t j = 0; j < receptor_xyz.size(); j++) {
             if (pose_memo == nullptr) {
                 distance = get_distance_3d(ligand_xyz[i].xyz, receptor_xyz[j].xyz);
             } else {
-                distance = pose_memo->distance_map[
-                    FROM_2D_INDEX(i, j, receptor_xyz.size())
-                ];
+                distance = pose_memo->distance_map[offset];
             }
             energy += safe_divide(
                 q1 * receptor_ffdata.partial_charges[j], distance
             ) * kCoulombFactor;
+            ++offset;
         }
     }
     return energy;

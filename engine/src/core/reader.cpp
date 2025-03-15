@@ -46,6 +46,8 @@ void ligand_pose_reader::handle_json_file(
 
     // Precalculate coefficients for nonbonded terms in pscore
     auto pscorer = std::make_shared<root_scorer>(sf_mgr_.get_pose_selection());
+    pscorer->bind_to_system(task_templ_.feed.receptor->get_ffdata(),
+                            ligand->get_ffdata());
     std::shared_ptr<root_scorer> bscorer;
     if (include_bscore_) bscorer = std::make_shared<root_scorer>(
         sf_mgr_.get_affinity_ranking()
