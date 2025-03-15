@@ -130,6 +130,24 @@ TEST(SimdDoubleTest, FusedMultiplySubtract) {
     }
 }
 
+TEST(SimdFloatTest, Reciprocal) {
+    auto a = simd_rcp(simd_float(6.54321f));
+    alignas(BDOCK_SIMD_ALIGNMENT) float buffer[BDOCK_SIMD_FLOAT_WIDTH];
+    simd_store(buffer, a);
+    for (int i = 0; i < BDOCK_SIMD_FLOAT_WIDTH; ++i) {
+        EXPECT_NEAR(buffer[i], 0.15283, 1e-6);
+    }
+}
+
+TEST(SimdDoubleTest, Reciprocal) {
+    auto a = simd_rcp(simd_double(9.7654321));
+    alignas(BDOCK_SIMD_ALIGNMENT) double buffer[BDOCK_SIMD_DOUBLE_WIDTH];
+    simd_store(buffer, a);
+    for (int i = 0; i < BDOCK_SIMD_DOUBLE_WIDTH; ++i) {
+        EXPECT_NEAR(buffer[i], 0.10240202274305, 1e-14);
+    }
+}
+
 TEST(SimdFloatTest, InvSqrt) {
     auto a = simd_invsqrt(simd_float(6.54321f));
     float buffer[BDOCK_SIMD_FLOAT_WIDTH];

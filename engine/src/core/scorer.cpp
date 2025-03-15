@@ -245,7 +245,35 @@ void mm_interaction_vdw_energy::bind_to_system(
     }
 }
 
+#ifdef ENABLE_SIMD_AVX2
 param_t mm_interaction_vdw_energy::report(
+    const molecule_pose& receptor_xyz,
+    const force_field_params& receptor_ffdata,
+    const molecule_pose& ligand_xyz,
+    const force_field_params& ligand_ffdata,
+    const instant_cache* pose_memo
+) const {
+    if (inter_molecular_pairs_.size() == 0) throw std::runtime_error(
+        "Please call mm_interaction_vdw_energy.bind_to_system(...) first!"
+    );
+    param_t energy = 0_r;
+    auto rcoords = reinterpret_cast<const param_t*>(receptor_xyz.data());
+    const param_t* distance_map = (pose_memo == nullptr)
+                                ? nullptr : pose_memo->distance_map.data();
+    size_t offset = 0, natoms = receptor_xyz.size();
+    for (size_t i = 0; i < ligand_xyz.size(); ++i) {
+        energy += calculate_vdw_pairs(ligand_xyz[i].xyz, rcoords, distance_map,
+                                      inter_molecular_pairs_, energy_cutoff_,
+                                      offset, natoms);
+        offset += natoms;
+    }
+    return energy * scale_;
+}
+
+param_t mm_interaction_vdw_energy::report_nosimd(
+#else
+param_t mm_interaction_vdw_energy::report(
+#endif
     const molecule_pose& receptor_xyz,
     const force_field_params& receptor_ffdata,
     const molecule_pose& ligand_xyz,
@@ -257,8 +285,8 @@ param_t mm_interaction_vdw_energy::report(
     );
     param_t energy = 0_r, distance;
     size_t offset = 0;
-    for (size_t i = 0; i < ligand_xyz.size(); i++) {
-        for (size_t j = 0; j < receptor_xyz.size(); j++) {
+    for (size_t i = 0; i < ligand_xyz.size(); ++i) {
+        for (size_t j = 0; j < receptor_xyz.size(); ++j) {
             const auto& fused = inter_molecular_pairs_[offset];
             if (pose_memo == nullptr) {
                 distance = get_distance_3d(ligand_xyz[i].xyz, receptor_xyz[j].xyz);

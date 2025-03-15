@@ -68,6 +68,14 @@ static inline simd_float operator*(simd_float a, simd_float b) {
     return { _mm256_mul_ps(a.internal_, b.internal_) };
 }
 
+static inline simd_float simd_max(simd_float a, simd_float b) {
+    return { _mm256_max_ps(a.internal_, b.internal_) };
+}
+
+static inline simd_float simd_min(simd_float a, simd_float b) {
+    return { _mm256_min_ps(a.internal_, b.internal_) };
+}
+
 // a*b+c
 static inline simd_float simd_fma(simd_float a, simd_float b, simd_float c) {
     return { _mm256_fmadd_ps(a.internal_, b.internal_, c.internal_) };
@@ -76,6 +84,14 @@ static inline simd_float simd_fma(simd_float a, simd_float b, simd_float c) {
 // a*b-c
 static inline simd_float simd_fms(simd_float a, simd_float b, simd_float c) {
     return { _mm256_fmsub_ps(a.internal_, b.internal_, c.internal_) };
+}
+
+// Approximate 1/x
+static inline simd_float simd_rcp(simd_float x) {
+    __m256 x0 = _mm256_rcp_ps(x.internal_);
+    // Apply 1-round Newton's method
+    __m256 two = _mm256_set1_ps(2.0f);
+    return { _mm256_mul_ps(x0, _mm256_fnmadd_ps(x.internal_, x0, two)) };
 }
 
 // native 1/sqrt(x)
