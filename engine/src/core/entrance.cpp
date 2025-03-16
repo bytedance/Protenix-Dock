@@ -150,6 +150,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
                               const std::string& output_file,
                               bool include_bscore) {
     perf_counter::singleton().reset();
+    manual_timer monitor;
 
     // Prepare root task
     docking_task origin;
@@ -200,6 +201,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
     loader.join();
     for (size_t i = 0; i < readers.size(); i++) readers[i].join();
     for (size_t i = 0; i < evaluators.size(); i++) evaluators[i].join();
+    LOG_INFO << "E2E time cost(us) is: " << monitor.get_elapsed_in_us();
     tell_metrics();
 }
 
@@ -209,6 +211,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
                               double slope,
                               bool include_bscore) {
     perf_counter::singleton().reset();
+    manual_timer monitor;
 
     // Prepare root task
     docking_task origin;
@@ -307,6 +310,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
     for (size_t i = 0; i < writers.size(); i++) writers[i].join();
 
     // Summary speed & hit
+    LOG_INFO << "E2E time cost(us) is: " << monitor.get_elapsed_in_us();
     tell_metrics();
     if (origin.feed.cache) {
         size_t hit, miss;
@@ -329,6 +333,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
                             double slope,
                             bool include_bscore) {
     perf_counter::singleton().reset();
+    manual_timer monitor;
 
     // Prepare root task
     docking_task origin;
@@ -430,6 +435,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
     for (size_t i = 0; i < writers.size(); i++) writers[i].join();
 
     // Summary speed & hit
+    LOG_INFO << "E2E time cost(us) is: " << monitor.get_elapsed_in_us();
     tell_metrics();
     if (origin.feed.cache) {
         size_t hit, miss;

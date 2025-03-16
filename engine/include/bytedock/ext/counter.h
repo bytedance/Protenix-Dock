@@ -62,9 +62,16 @@ public:
     ~step_timer();
 
 private:
-    size_t get_timestamp_in_us();
-
     workflow_step step_;
+    size_t start_;
+};
+
+class manual_timer {
+public:
+    manual_timer();
+    size_t get_elapsed_in_us();
+
+private:
     size_t start_;
 };
 
