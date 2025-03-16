@@ -33,9 +33,9 @@ set(VERSION "namespace bytedock {
 
 const char* VERSION_STR = \"ProtenixDock\"
 #if ENABLE_DOUBLE_PRECISION
-                          \"Double\"
+                          \" Double\"
 #else
-                          \"Float\"
+                          \" Float\"
 #endif
 #if ENABLE_SIMD_AVX2
                           \"+AVX2\"
