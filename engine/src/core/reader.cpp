@@ -19,6 +19,7 @@
 
 #include <boost/filesystem/path.hpp>
 
+#include "bytedock/ext/counter.h"
 #include "bytedock/ext/pfile.h"
 #include "bytedock/ext/logging.h"
 
@@ -47,9 +48,13 @@ void ligand_pose_reader::handle_json_file(
     // Precalculate coefficients for nonbonded terms in pscore
     auto pscorer = std::make_shared<root_scorer>(sf_mgr_.get_pose_selection());
     auto& receptor_ffdata = task_templ_.feed.receptor->get_ffdata();
-    pscorer->bind_to_system(receptor_ffdata, ligand->get_ffdata());
+    {
+        step_timer st(EVALUATE_FAST_SCORE_STEP);
+        pscorer->bind_to_system(receptor_ffdata, ligand->get_ffdata());
+    }
     std::shared_ptr<root_scorer> bscorer;
     if (include_bscore_) {
+        step_timer st(EVALUATE_AFFINITY_SCORE_STEP);
         bscorer = std::make_shared<root_scorer>(sf_mgr_.get_affinity_ranking());
         pscorer->bind_to_system(receptor_ffdata, ligand->get_ffdata());
     }
