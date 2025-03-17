@@ -19,10 +19,12 @@
 
 #include <boost/filesystem/path.hpp>
 
+#include "bytedock/ext/counter.h"
 #include "bytedock/ext/pfile.h"
 #include "bytedock/ext/logging.h"
 
 namespace bytedock {
+
 std::unordered_map<std::string,
     std::unordered_map<std::string, param_t>> global_energy_info = {};
 inline std::string get_file_name(const std::string& path) {
@@ -30,7 +32,7 @@ inline std::string get_file_name(const std::string& path) {
     return inp.stem().string();
 }
 
-void single_pose_reader::handle_json_file(
+void ligand_pose_reader::handle_json_file(
     const std::string& path, blocking_queue<name_and_task>& parsed_queue
 ) {
     auto ligand = std::make_shared<free_ligand>();
@@ -42,61 +44,44 @@ void single_pose_reader::handle_json_file(
                     << std::endl << " with reason: " << e.what();
         return;
     }
-    auto file_name = get_file_name(path);
-    if (ligand->get_nposes() > 1) {
-        LOG_WARNING << "ligand conformer pose size: " <<  ligand->get_nposes() << path;
+
+    // Precalculate coefficients for nonbonded terms in pscore
+    auto pscorer = std::make_shared<root_scorer>(sf_mgr_.get_pose_selection());
+    auto& receptor_ffdata = task_templ_.feed.receptor->get_ffdata();
+    {
+        step_timer st(EVALUATE_FAST_SCORE_STEP);
+        pscorer->bind_to_system(receptor_ffdata, ligand->get_ffdata());
     }
-    nposes_manager::singleton().insert(file_name, gen_factor_);
-    auto prefix = file_name + "/pose-";
-    global_energy_info[remove_pose_suffix_value(prefix)] = {
+    std::shared_ptr<root_scorer> bscorer;
+    if (include_bscore_) {
+        step_timer st(EVALUATE_AFFINITY_SCORE_STEP);
+        bscorer = std::make_shared<root_scorer>(sf_mgr_.get_affinity_ranking());
+        pscorer->bind_to_system(receptor_ffdata, ligand->get_ffdata());
+    }
+
+    // Used by `mc_prune_energy_threshold` in Monte-Carlo searching
+    auto file_name = get_file_name(path);
+    global_energy_info[file_name] = {
         {"minimum_pre_opt_energy", 1e8_r},
         {"minimum_accepted_energy", 1e8_r},
     };
-    for (size_t i = 0; i < gen_factor_; ++i) {
-        std::string name(prefix + std::to_string(i));
-        docking_task task(origin_);  // Copy
-        task.feed.ligand = ligand;
-        task.feed.pose_id = i;
-        parsed_queue.push({std::move(name), std::move(task)});
-    }
-}
 
-void single_pose_reader::fill(blocking_queue<name_and_task>& parsed_queue) {
-    std::string path = std::move(file_queue_.pop());
-    while (!file_queue_.is_eoq(path)) {
-        handle_json_file(path, parsed_queue);
-        path = std::move(file_queue_.pop());
-    }
-    file_queue_.close();  // Put back the EOF flag
-    parsed_queue.close();
-}
-
-void multi_pose_reader::handle_json_file(
-    const std::string& path, blocking_queue<name_and_task>& parsed_queue
-) {
-    auto ligand = std::make_shared<free_ligand>();
-    try {
-        auto in = open_for_read(path);
-        ligand->parse(in, false);
-    } catch (std::exception& e) {
-        LOG_WARNING << "Due to invalid format or content, skip ligand: "
-                    << path << e.what();
-        return;
-    }
-    auto file_name = get_file_name(path);
-    auto nposes = ligand->get_nposes();
-    nposes_manager::singleton().insert(file_name, nposes);
+    // Generate tasks per pose
+    size_t ntasks_to_generate = MATH_PAIR_MAX(ligand->get_nposes(), max_ntasks_);
+    nposes_manager::singleton().insert(file_name, ntasks_to_generate);
     auto prefix = file_name + "/pose-";
-    for (size_t i = 0; i < nposes; i++) {
+    for (size_t i = 0; i < ntasks_to_generate; ++i) {
         std::string name(prefix + std::to_string(i));
-        docking_task task(origin_);  // Copy
+        docking_task task(task_templ_);  // Copy
         task.feed.ligand = ligand;
         task.feed.pose_id = i;
+        task.feed.pscorer = pscorer;
+        task.feed.bscorer = bscorer;
         parsed_queue.push({std::move(name), std::move(task)});
     }
 }
 
-void multi_pose_reader::fill(blocking_queue<name_and_task>& parsed_queue) {
+void ligand_pose_reader::fill(blocking_queue<name_and_task>& parsed_queue) {
     std::string path = std::move(file_queue_.pop());
     while (!file_queue_.is_eoq(path)) {
         handle_json_file(path, parsed_queue);

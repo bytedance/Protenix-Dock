@@ -51,7 +51,7 @@ std::string pose_writer::consume(const std::string& name, pose_batch& batch) {
     }
     *content << "  \"best_pose\": {" << std::endl;
     *content << "    \"index\": " << batch.best_id << "," << std::endl;
-    *content << "    \"bscore\": " << batch.bscore << std::endl;
+    *content << "    \"bscore\": " << batch.best_bscore << std::endl;
     *content << "  }," << std::endl;
     *content << "  \"poses\": [" << std::endl;
     for (size_t i = 0; i < candidates.size(); ++i) {
@@ -84,7 +84,7 @@ void pose_writer::fill(blocking_queue<std::string>& file_queue) {
     auto pair = std::move(batch_queue_.pop());
     while (!batch_queue_.is_eoq(pair)) {
         nposes_manager::singleton().erase(pair.first);
-        if (preprocess(pair.second, include_bscore_)) {
+        if (preprocess(pair.second)) {
             LOG_DEBUG << "Tasks with prefix [" << pair.first << "] has finished.";
             file_queue.push(consume(pair.first, pair.second));
         } else {
@@ -121,7 +121,7 @@ static void find_closest_pose(
     }
 }
 
-bool pose_cluster::preprocess(pose_batch& aggregated, bool include_bscore) {
+bool pose_cluster::preprocess(pose_batch& aggregated) {
     auto& candidates = aggregated.candidates;  // At least 1 pose
 
     // Cluster conformer candidates
@@ -164,11 +164,10 @@ bool pose_cluster::preprocess(pose_batch& aggregated, bool include_bscore) {
 
     // Calculate affinity score
     aggregated.best_id = 0;
-    if (include_bscore) {
+    if (aggregated.bscorer) {
         step_timer t(EVALUATE_AFFINITY_SCORE_STEP);
-        auto& bb = sf_mgr_.get_affinity_ranking();
         auto& best_pose = candidates[0];
-        aggregated.bscore = bb.combine(
+        aggregated.best_bscore = (aggregated.bscorer)->combine(
             best_pose.receptor_xyz, aggregated.receptor->get_ffdata(),
             best_pose.ligand_xyz, aggregated.ligand->get_ffdata()
         );
@@ -176,33 +175,22 @@ bool pose_cluster::preprocess(pose_batch& aggregated, bool include_bscore) {
     return true;
 }
 
-bool pose_ranker::preprocess(pose_batch& aggregated, bool include_bscore) {
+bool pose_ranker::preprocess(pose_batch& aggregated) {
     auto& candidates = aggregated.candidates;  // At least 1 pose
-    auto& pp = sf_mgr_.get_pose_selection();
-    auto& receptor_ffdata = aggregated.receptor->get_ffdata();
-    auto& ligand_ffdata = aggregated.ligand->get_ffdata();
-
     size_t best_id;
-    instant_cache tmp, memo;
     for (size_t i = 0; i < candidates.size(); ++i) {
-        auto& cdd = candidates[i];
-        step_timer t(EVALUATE_FAST_SCORE_STEP);
-        memo = pp.precalculate(cdd.receptor_xyz, receptor_ffdata,
-                               cdd.ligand_xyz, ligand_ffdata);  // Swap
-        cdd.pscore = pp.combine(cdd.receptor_xyz, receptor_ffdata,
-                                cdd.ligand_xyz, ligand_ffdata, memo);
-        if (i == 0 || cdd.pscore < candidates[best_id].pscore) {
+        if (i == 0 || candidates[i].pscore < candidates[best_id].pscore) {
             best_id = i;
-            tmp = std::move(memo);
         }
     }
     aggregated.best_id = best_id;
-    if (include_bscore) {
+    if (aggregated.bscorer) {
         step_timer t(EVALUATE_AFFINITY_SCORE_STEP);
-        auto& bb = sf_mgr_.get_affinity_ranking();
-        auto& best_pose = candidates[best_id];
-        aggregated.bscore = bb.combine(best_pose.receptor_xyz, receptor_ffdata,
-                                       best_pose.ligand_xyz, ligand_ffdata, tmp);
+        auto& best_pose = candidates[aggregated.best_id];
+        aggregated.best_bscore = (aggregated.bscorer)->combine(
+            best_pose.receptor_xyz, aggregated.receptor->get_ffdata(),
+            best_pose.ligand_xyz, aggregated.ligand->get_ffdata()
+        );
     }
     return true;
 }

@@ -150,6 +150,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
                               const std::string& output_file,
                               bool include_bscore) {
     perf_counter::singleton().reset();
+    manual_timer monitor;
 
     // Prepare root task
     docking_task origin;
@@ -171,10 +172,10 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
     blocking_queue<name_and_task> parsed_queue(nworkers_*2, eoq_task, nreaders_);
     std::vector<std::thread> readers;
     for (size_t i = 0; i < nreaders_; i++) {
-        readers.emplace_back([&origin, &inf_queue, &parsed_queue]() {
+        readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            multi_pose_reader one(origin, inf_queue);
+            ligand_pose_reader one(sf_mgr_, include_bscore, origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -188,7 +189,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
         evaluators.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_INFO << "Evaluator has started...";
-            scoring_evaluator one(sf_mgr_, include_bscore, parsed_queue);
+            scoring_evaluator one(parsed_queue);
             one.fill(pose_queue);
             LOG_INFO << "Evaluator has ended.";
         });
@@ -200,6 +201,7 @@ void ReusableEngine::evaluate(const std::string& ligand_index_file,
     loader.join();
     for (size_t i = 0; i < readers.size(); i++) readers[i].join();
     for (size_t i = 0; i < evaluators.size(); i++) evaluators[i].join();
+    LOG_INFO << "E2E time cost(us) is: " << monitor.get_elapsed_in_us();
     tell_metrics();
 }
 
@@ -209,6 +211,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
                               double slope,
                               bool include_bscore) {
     perf_counter::singleton().reset();
+    manual_timer monitor;
 
     // Prepare root task
     docking_task origin;
@@ -236,10 +239,10 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
     blocking_queue<name_and_task> parsed_queue(nworkers_*2, eoq_task, nreaders_);
     std::vector<std::thread> readers;
     for (size_t i = 0; i < nreaders_; i++) {
-        readers.emplace_back([&origin, &inf_queue, &parsed_queue]() {
+        readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            multi_pose_reader one(origin, inf_queue);
+            ligand_pose_reader one(sf_mgr_, include_bscore, origin, inf_queue);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -283,7 +286,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
         writers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Writer has started...";
-            pose_ranker one(sf_mgr_, include_bscore, output_dir, ligand_queue);
+            pose_ranker one(output_dir, ligand_queue);
             one.fill(outf_queue);
             LOG_DEBUG << "Writer has ended.";
         });
@@ -307,6 +310,7 @@ void ReusableEngine::optimize(const std::string& ligand_index_file,
     for (size_t i = 0; i < writers.size(); i++) writers[i].join();
 
     // Summary speed & hit
+    LOG_INFO << "E2E time cost(us) is: " << monitor.get_elapsed_in_us();
     tell_metrics();
     if (origin.feed.cache) {
         size_t hit, miss;
@@ -329,6 +333,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
                             double slope,
                             bool include_bscore) {
     perf_counter::singleton().reset();
+    manual_timer monitor;
 
     // Prepare root task
     docking_task origin;
@@ -359,10 +364,11 @@ void ReusableEngine::search(const std::string& ligand_index_file,
     blocking_queue<name_and_task> parsed_queue(nworkers_*2, eoq_task, nreaders_);
     std::vector<std::thread> readers;
     for (size_t i = 0; i < nreaders_; i++) {
-        readers.emplace_back([&origin, exhaustiveness, &inf_queue, &parsed_queue]() {
+        readers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Reader has started...";
-            single_pose_reader one(origin, exhaustiveness, inf_queue);
+            ligand_pose_reader one(sf_mgr_, include_bscore,
+                                   origin, inf_queue, exhaustiveness);
             one.fill(parsed_queue);
             LOG_DEBUG << "Reader has ended.";
         });
@@ -375,7 +381,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
         searchers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_INFO << "Searcher has started...";
-            monte_carlo_searcher one(sf_mgr_, bc_, seed, max_nsteps, relax_nsteps,
+            monte_carlo_searcher one(bc_, seed, max_nsteps, relax_nsteps,
                                      mc_mmenergy_threshold, parsed_queue);
             one.fill(pose_queue);
             LOG_INFO << "Searcher has ended.";
@@ -404,7 +410,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
         writers.emplace_back([&]() {
             LOG_TELL_THREAD_ID();
             LOG_DEBUG << "Writer has started...";
-            pose_cluster one(sf_mgr_, num_modes, min_rmsd, include_bscore,
+            pose_cluster one(num_modes, min_rmsd,
                              output_dir, ligand_queue);
             one.fill(outf_queue);
             LOG_DEBUG << "Writer has ended.";
@@ -429,6 +435,7 @@ void ReusableEngine::search(const std::string& ligand_index_file,
     for (size_t i = 0; i < writers.size(); i++) writers[i].join();
 
     // Summary speed & hit
+    LOG_INFO << "E2E time cost(us) is: " << monitor.get_elapsed_in_us();
     tell_metrics();
     if (origin.feed.cache) {
         size_t hit, miss;

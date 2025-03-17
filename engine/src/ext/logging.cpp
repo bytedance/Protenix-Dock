@@ -48,7 +48,7 @@ boost::shared_ptr<sink_t> enable_global_logging(const std::string& path, int ver
 
     auto sink = boost::make_shared<sink_t>(backend);
     sink->set_formatter(expr::stream
-        << "[" << expr::format_date_time<boost::posix_time::ptime>("TimeStamp", "%Y-%m-%d %H:%M:%S")
+        << "[" << expr::format_date_time<boost::posix_time::ptime>("TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
         << " - " << std::setw(3) << std::setfill('0') << expr::attr<size_t>("ThreadID")
         << " - " << expr::attr<trivial::severity_level>("Severity")
         << "] " << expr::smessage);

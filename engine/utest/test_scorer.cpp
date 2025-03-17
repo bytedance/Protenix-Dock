@@ -16,11 +16,64 @@
 */
 
 #include "bytedock/core/scorer.h"
-#include "bytedock/lib/math.h"
 
 #include "test_lib.h"
 
 namespace bytedock {
+
+TEST(FastScorerTest, InteractionVDW) {
+    molecule_pose receptor_xyz = {
+        {8.80, 24.38, 5.30},
+        {9.08, 25.41, 4.60},
+        {5.68, 28.61, 7.50},
+        {4.60, 21.41, 9.90},
+        {6.52, 22.29, 3.39},
+    };
+    molecule_pose ligand_xyz = {
+        { 9.781, 25.678, 5.445},
+        {10.482, 24.527, 5.659},
+        {10.255, 23.716, 6.568},
+    };
+
+    force_field_params receptor_ffdata;
+    receptor_ffdata.vdw_params = {  // sigma, epsilon
+        {3.2500, 0.1700},
+        {1.0691, 0.0157},
+        {3.0481, 0.1463},
+        {3.2428, 0.0930},
+        {3.1560, 0.0726},
+    };
+    force_field_params ligand_ffdata;
+    ligand_ffdata.vdw_types = {  // sigma, epsilon
+        19, 13, 16,
+    };
+
+    InteractionVdwEnergyParams params;
+    params.scale = 2_r;
+    params.cutoff = 1_r;
+    params.types.resize(kNumVdwTypes);
+    for (size_t i = 0; i < kNumVdwTypes; ++i) params.types[i] = {0.8_r, 1.2_r};
+    mm_interaction_vdw_energy calc("InteractionVDW_Energy", params);
+
+    calc.bind_to_system(receptor_ffdata, ligand_ffdata);
+    param_t energy = calc.report(receptor_xyz, receptor_ffdata,
+                                 ligand_xyz, ligand_ffdata);
+    EXPECT_NEAR(7.791156, energy, 1e-6);
+
+    instant_cache memo;
+    memo.distance_map.resize(ligand_xyz.size() * receptor_xyz.size());
+    size_t offset = 0;
+    for (size_t i = 0; i < ligand_xyz.size(); ++i) {
+        for (size_t j = 0; j < receptor_xyz.size(); ++j) {
+            memo.distance_map[offset] = get_distance_3d(ligand_xyz[i].xyz,
+                                                        receptor_xyz[j].xyz);
+            ++offset;
+        }
+    }
+    energy = calc.report(receptor_xyz, receptor_ffdata,
+                         ligand_xyz, ligand_ffdata, &memo);
+    EXPECT_NEAR(7.791156, energy, 1e-6);
+}
 
 TEST(FastScorerTest, TorsionPenalty) {
     molecule_pose mol_xyz = {

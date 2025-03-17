@@ -17,6 +17,7 @@
 
 #include "bytedock/core/scorer.h"
 
+#include "bytedock/core/pair.h"
 #include "bytedock/lib/utility.h"
 
 namespace bytedock {
@@ -56,61 +57,68 @@ root_scorer::root_scorer(
     if CHECK_PARAMETER_NON_ZERO(sfp.interaction_coulomb_energy_coef) {
         add_coefficient("InteractionCoulomb_oriEnergy",
                         sfp.interaction_coulomb_energy_coef);
-        add_child(new mm_interaction_coulomb_energy("InteractionCoulomb_oriEnergy"));
+        add_child(std::make_shared<mm_interaction_coulomb_energy>(
+            "InteractionCoulomb_oriEnergy"
+        ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.interaction_vdw_energy_coef) {
         add_coefficient("InteractionVDW_Energy",
                         sfp.interaction_vdw_energy_coef);
-        add_child(new mm_interaction_vdw_energy(
+        inter_molecular_vdw_energy_ = std::make_shared<mm_interaction_vdw_energy>(
             "InteractionVDW_Energy", sfp.interaction_vdw_energy
-        ));
+        );
+        add_child(inter_molecular_vdw_energy_);
+    } else {
+        inter_molecular_vdw_energy_ = std::make_shared<leaf_scorer>("Zero_Energy");
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.ionic_energy_coef) {
         add_coefficient("Ionic_Energy", sfp.ionic_energy_coef);
-        add_child(new ionic_interaction_total_energy(
+        add_child(std::make_shared<ionic_interaction_total_energy>(
             "Ionic_Energy", sfp.ionic_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.pi_cationic_energy_coef) {
         add_coefficient("Pi_Cationic_Energy", sfp.pi_cationic_energy_coef);
-        add_child(new cation_pi_interaction_total_energy(
+        add_child(std::make_shared<cation_pi_interaction_total_energy>(
             "Pi_Cationic_Energy", sfp.pi_cationic_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.f2f_pi_stacking_energy_coef) {
         add_coefficient("F2FPiStacking_Energy", sfp.f2f_pi_stacking_energy_coef);
-        add_child(new pi_stacking_total_energy(
+        add_child(std::make_shared<pi_stacking_total_energy>(
             "F2FPiStacking_Energy", 0_r, sfp.f2f_pi_stacking_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.e2f_pi_stacking_energy_coef) {
         add_coefficient("E2FPiStacking_Energy", sfp.e2f_pi_stacking_energy_coef);
-        add_child(new pi_stacking_total_energy(
+        add_child(std::make_shared<pi_stacking_total_energy>(
             "E2FPiStacking_Energy", 90_r, sfp.e2f_pi_stacking_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.hbond_energy_coef) {
         add_coefficient("Hbond_Energy", sfp.hbond_energy_coef);
-        add_child(new hbond_energy("Hbond_Energy", sfp.hbond_energy));
+        add_child(std::make_shared<hbond_energy>("Hbond_Energy", sfp.hbond_energy));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.hydrophobic_energy_coef) {
         add_coefficient("Hydrophobic_Energy", sfp.hydrophobic_energy_coef);
-        add_child(new hydrophobic_energy(
+        add_child(std::make_shared<hydrophobic_energy>(
             "Hydrophobic_Energy", sfp.hydrophobic_energy
         ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.torsion_strain_penalty_coef) {
         add_coefficient("TorsionStrain_Penalty", sfp.torsion_strain_penalty_coef);
-        add_child(new torsion_strain_penalty_scorer("TorsionStrain_Penalty"));
+        add_child(std::make_shared<torsion_strain_penalty_scorer>(
+            "TorsionStrain_Penalty"
+        ));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.rotatable_energy_coef) {
         add_coefficient("Rotatable_Energy", sfp.rotatable_energy_coef);
-        add_child(new rotatable_energy("Rotatable_Energy"));
+        add_child(std::make_shared<rotatable_energy>("Rotatable_Energy"));
     }
     if CHECK_PARAMETER_NON_ZERO(sfp.gbsa_energy_delta_coef) {
         add_coefficient("Gbsa_Com_Energy-Gbsa_Lig_Energy-Gbsa_Pro_Energy",
                         sfp.gbsa_energy_delta_coef);
-        add_child(new gbsa_total_energy);
+        add_child(std::make_shared<gbsa_total_energy>());
     }
 }
 
@@ -184,7 +192,7 @@ instant_cache root_scorer::precalculate(
         const atom_position& xyz1 = ligand_xyz[i];
         for (size_t j = 0; j < receptor_xyz.size(); j++) {
             memo.distance_map[offset] = get_distance_3d(xyz1.xyz, receptor_xyz[j].xyz);
-            offset++;
+            ++offset;
         }
     }
     memo.receptor_ring5_centroids = get_ring_centroids(receptor_xyz,
@@ -219,6 +227,25 @@ mm_interaction_vdw_energy::mm_interaction_vdw_energy(
 
 #define FROM_2D_INDEX(idx, idy, dimy) ((idx)*(dimy)+(idy))
 
+void mm_interaction_vdw_energy::bind_to_system(
+    const force_field_params& receptor_ffdata,
+    const force_field_params& ligand_ffdata
+) {
+    auto& rvdw_params = receptor_ffdata.vdw_params;
+    auto& lvdw_types = ligand_ffdata.vdw_types;
+    inter_molecular_pairs_.resize(rvdw_params.size() * lvdw_types.size());
+    size_t offset = 0;  // The enumeration sequence is compatible with `FROM_2D_INDEX`
+    for (size_t i = 0; i < lvdw_types.size(); ++i) {
+        const lj_vdw& type1 = scaled_vdw_types_[lvdw_types[i]];
+        for (size_t j = 0; j < rvdw_params.size(); ++j) {
+            precalculate_vdw_pair(type1, rvdw_params[j],
+                                  inter_molecular_pairs_[offset]);
+            ++offset;
+        }
+    }
+}
+
+#ifdef ENABLE_SIMD_AVX2
 param_t mm_interaction_vdw_energy::report(
     const molecule_pose& receptor_xyz,
     const force_field_params& receptor_ffdata,
@@ -226,26 +253,49 @@ param_t mm_interaction_vdw_energy::report(
     const force_field_params& ligand_ffdata,
     const instant_cache* pose_memo
 ) const {
-    param_t energy = 0.;
-    param_t distance, sigma1, epsilon1, fused, u6;
-    for (size_t i = 0; i < ligand_xyz.size(); i++) {
-        const lj_vdw& type1 = scaled_vdw_types_[ligand_ffdata.vdw_types[i]];
-        sigma1 = type1.sigma;
-        epsilon1 = type1.epsilon;
-        for (size_t j = 0; j < receptor_xyz.size(); j++) {
-            const lj_vdw& type2 = receptor_ffdata.vdw_params[j];
+    if (inter_molecular_pairs_.size() == 0) throw std::runtime_error(
+        "Please call mm_interaction_vdw_energy.bind_to_system(...) first!"
+    );
+    param_t energy = 0_r;
+    auto rcoords = reinterpret_cast<const param_t*>(receptor_xyz.data());
+    const param_t* distance_map = (pose_memo == nullptr)
+                                ? nullptr : pose_memo->distance_map.data();
+    size_t offset = 0, natoms = receptor_xyz.size();
+    for (size_t i = 0; i < ligand_xyz.size(); ++i) {
+        energy += calculate_vdw_pairs(ligand_xyz[i].xyz, rcoords, distance_map,
+                                      inter_molecular_pairs_, energy_cutoff_,
+                                      offset, natoms);
+        offset += natoms;
+    }
+    return energy * scale_;
+}
+
+param_t mm_interaction_vdw_energy::report_nosimd(
+#else
+param_t mm_interaction_vdw_energy::report(
+#endif
+    const molecule_pose& receptor_xyz,
+    const force_field_params& receptor_ffdata,
+    const molecule_pose& ligand_xyz,
+    const force_field_params& ligand_ffdata,
+    const instant_cache* pose_memo
+) const {
+    if (inter_molecular_pairs_.size() == 0) throw std::runtime_error(
+        "Please call mm_interaction_vdw_energy.bind_to_system(...) first!"
+    );
+    param_t energy = 0_r, distance;
+    size_t offset = 0;
+    for (size_t i = 0; i < ligand_xyz.size(); ++i) {
+        for (size_t j = 0; j < receptor_xyz.size(); ++j) {
+            const auto& fused = inter_molecular_pairs_[offset];
             if (pose_memo == nullptr) {
                 distance = get_distance_3d(ligand_xyz[i].xyz, receptor_xyz[j].xyz);
             } else {
-                distance = pose_memo->distance_map[
-                    FROM_2D_INDEX(i, j, receptor_xyz.size())
-                ];
+                distance = pose_memo->distance_map[offset];
             }
-            fused = (sigma1 + type2.sigma) * 0.5_r;
-            u6 = std::pow(safe_divide(fused, distance), 6_r);
-            fused = std::sqrt(epsilon1 * type2.epsilon) * 4_r;
-            distance = (MATH_SQUARE_SCALAR(u6) - u6) * fused; // Used as `tmp`
-            energy += clamp(distance, -energy_cutoff_, energy_cutoff_);
+            energy += calculate_vdw_pair(fused.sigma, fused.epsilon,  // c6 & c12
+                                         distance, energy_cutoff_);
+            ++offset;
         }
     }
     return energy * scale_;
@@ -257,19 +307,19 @@ param_t mm_interaction_coulomb_energy::report(
     const instant_cache* pose_memo
 ) const {
     param_t energy = 0., distance, q1;
+    size_t offset = 0;
     for (size_t i = 0; i < ligand_xyz.size(); i++) {
         q1 = ligand_ffdata.partial_charges[i];
         for (size_t j = 0; j < receptor_xyz.size(); j++) {
             if (pose_memo == nullptr) {
                 distance = get_distance_3d(ligand_xyz[i].xyz, receptor_xyz[j].xyz);
             } else {
-                distance = pose_memo->distance_map[
-                    FROM_2D_INDEX(i, j, receptor_xyz.size())
-                ];
+                distance = pose_memo->distance_map[offset];
             }
             energy += safe_divide(
                 q1 * receptor_ffdata.partial_charges[j], distance
             ) * kCoulombFactor;
+            ++offset;
         }
     }
     return energy;

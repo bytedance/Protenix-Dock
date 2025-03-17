@@ -31,17 +31,17 @@ void scoring_evaluator::calculate_scores(std::string& name, binding_input& in,
     auto& ligand_ffdata = in.ligand->get_ffdata();
     {
         step_timer t(EVALUATE_FAST_SCORE_STEP);
-        auto& pp = sf_mgr_.get_pose_selection();
+        auto& pp = *(in.pscorer);
         memo = pp.precalculate(receptor_xyz, receptor_ffdata,
                                ligand_xyz, ligand_ffdata);  // Move
         task.fetch.pscore = pp.combine(receptor_xyz, receptor_ffdata,
                                        ligand_xyz, ligand_ffdata, memo);
     }
-    {
+    if (in.bscorer) {
         step_timer t(EVALUATE_AFFINITY_SCORE_STEP);
-        auto& bb = sf_mgr_.get_affinity_ranking();
-        task.fetch.bscore = bb.combine(receptor_xyz, receptor_ffdata,
-                                       ligand_xyz, ligand_ffdata, memo);
+        task.fetch.bscore = (in.bscorer)->combine(
+            receptor_xyz, receptor_ffdata, ligand_xyz, ligand_ffdata, memo
+        );
     }
     task.feed = std::move(in);
     out_queue.push({std::move(name), std::move(task)});

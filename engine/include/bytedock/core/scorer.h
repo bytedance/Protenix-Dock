@@ -28,8 +28,11 @@ namespace bytedock {
 
 // If coordinates of receptor or ligand change, cache should be reconstructed
 struct instant_cache {
-    // Shape is [ligand_natoms, receptor_natoms]
-    std::vector<param_t> distance_map;
+#ifdef ENABLE_SIMD_AVX2
+    simd_vector<param_t> distance_map;
+#else
+    std::vector<param_t> distance_map;  // Shape is [ligand_natoms, receptor_natoms]
+#endif
 
     // Shape is [pi_nrings]
     std::vector<atom_position> receptor_ring5_centroids;
@@ -53,14 +56,22 @@ public:
         const instant_cache* pose_memo = nullptr
     ) const;
 
+    // Enable precalculation on force field parameters
+    virtual void bind_to_system(const force_field_params& receptor_ffdata,
+                                const force_field_params& ligand_ffdata) {
+        for (auto& scorer: children_) {
+            scorer->bind_to_system(receptor_ffdata, ligand_ffdata);
+        }
+    }
+
 protected:
     // Ownership of the pointer is transferred as well
-    void add_child(abstract_scorer* scorer) {
-        children_.push_back(std::unique_ptr<abstract_scorer>(scorer));
+    void add_child(std::shared_ptr<abstract_scorer> scorer) {
+        children_.push_back(scorer);
     }
 
 private:
-    std::vector<std::unique_ptr<abstract_scorer> > children_;
+    std::vector<std::shared_ptr<abstract_scorer> > children_;
 };
 
 class leaf_scorer : public abstract_scorer {
@@ -79,7 +90,9 @@ public:
                            const force_field_params& receptor_ffdata,
                            const molecule_pose& ligand_xyz,
                            const force_field_params& ligand_ffdata,
-                           const instant_cache* pose_memo = nullptr) const = 0;
+                           const instant_cache* pose_memo = nullptr) const {
+        return 0_r;
+    }
 
 private:
     const std::string name_;
@@ -125,6 +138,11 @@ public:
                                const molecule_pose& ligand_xyz,
                                const force_field_params& ligand_ffdata) const;
 
+    // Used for randomizing the initial pose in Monte-Carlo search
+    const leaf_scorer& get_inter_molecular_vdw_energy() {
+        return *inter_molecular_vdw_energy_;
+    }
+
 protected:
     void add_coefficient(const std::string& name, param_t value) {
         coefficients_[name] = value;
@@ -133,13 +151,13 @@ protected:
 private:
     const std::string sf_name_;  // For debug
     std::unordered_map<std::string, param_t> coefficients_;
+    std::shared_ptr<leaf_scorer> inter_molecular_vdw_energy_;  // Never empty!
 };
 
 class mm_interaction_vdw_energy : public leaf_scorer {
 public:
-    mm_interaction_vdw_energy(const std::string& name);
     mm_interaction_vdw_energy(const std::string& name,
-                                      const InteractionVdwEnergyParams& params);
+                              const InteractionVdwEnergyParams& params);
 
     param_t report(
         const molecule_pose& receptor_xyz,
@@ -148,6 +166,18 @@ public:
         const force_field_params& ligand_ffdata,
         const instant_cache* pose_memo = nullptr
     ) const override;
+#if ENABLE_SIMD_AVX2  // For testing
+    param_t report_nosimd(
+        const molecule_pose& receptor_xyz,
+        const force_field_params& receptor_ffdata,
+        const molecule_pose& ligand_xyz,
+        const force_field_params& ligand_ffdata,
+        const instant_cache* pose_memo = nullptr
+    ) const;
+#endif
+
+    void bind_to_system(const force_field_params& receptor_ffdata,
+                        const force_field_params& ligand_ffdata) override;
 
 private:
     param_t scale_;
@@ -155,6 +185,16 @@ private:
 
     // It is enabled by option `adopt_tuned_ligvdw_params=True` in pscore settings
     lj_vdw scaled_vdw_types_[kNumVdwTypes];
+
+    /**
+     * It contains all atom pairs between receptor and ligand. In result, its shape is
+     * [num_ligand_atoms, num_receptor_atoms].
+     *
+     * If receptor has 5000 atoms and ligand has 100 atoms, 8 MB storage is needed for
+     * double precision. Thus, it won't be a big problem for most protein-ligand
+     * docking tasks.
+     */
+    std::vector<lj_vdw> inter_molecular_pairs_;
 };
 
 class mm_interaction_coulomb_energy : public leaf_scorer {
@@ -221,8 +261,8 @@ private:
 
     param_t lc_coef_;
     param_t pc_coef_;
-    std::unique_ptr<ionic_interaction_batch> lc_inter_;
-    std::unique_ptr<ionic_interaction_batch> pc_inter_;
+    std::shared_ptr<ionic_interaction_batch> lc_inter_;
+    std::shared_ptr<ionic_interaction_batch> pc_inter_;
 };
 
 class cation_pi_interaction_total_energy : public leaf_scorer {
@@ -261,10 +301,10 @@ private:
     param_t lc6_coef_;
     param_t pc5_coef_;
     param_t pc6_coef_;
-    std::unique_ptr<cation_pi_interaction_batch> lc5_inter_;
-    std::unique_ptr<cation_pi_interaction_batch> lc6_inter_;
-    std::unique_ptr<cation_pi_interaction_batch> pc5_inter_;
-    std::unique_ptr<cation_pi_interaction_batch> pc6_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> lc5_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> lc6_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> pc5_inter_;
+    std::shared_ptr<cation_pi_interaction_batch> pc6_inter_;
 };
 
 class hbond_energy : public leaf_scorer {
@@ -312,14 +352,14 @@ private:
     param_t hpdcn_coef_;
     param_t hpdnc_coef_;
     param_t hpdnn_coef_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldcc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldcn_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldnc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hldnn_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdcc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdcn_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdnc_inter_;
-    std::unique_ptr<hbond_interactions_ga_tuning_param> hpdnn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldcc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldcn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldnc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hldnn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdcc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdcn_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdnc_inter_;
+    std::shared_ptr<hbond_interactions_ga_tuning_param> hpdnn_inter_;
 };
 
 class torsion_strain_penalty_scorer : public leaf_scorer {
@@ -377,10 +417,10 @@ protected:
     param_t l5r6_coef_;
     param_t l6r5_coef_;
     param_t l6r6_coef_;
-    std::unique_ptr<pi_stacking_batch> l5r5_inter_;
-    std::unique_ptr<pi_stacking_batch> l5r6_inter_;
-    std::unique_ptr<pi_stacking_batch> l6r5_inter_;
-    std::unique_ptr<pi_stacking_batch> l6r6_inter_;
+    std::shared_ptr<pi_stacking_batch> l5r5_inter_;
+    std::shared_ptr<pi_stacking_batch> l5r6_inter_;
+    std::shared_ptr<pi_stacking_batch> l6r5_inter_;
+    std::shared_ptr<pi_stacking_batch> l6r6_inter_;
 };
 
 class rotatable_energy : public leaf_scorer {

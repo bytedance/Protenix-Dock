@@ -19,17 +19,20 @@
 
 #include <string>
 
+#include "bytedock/core/factory.h"
 #include "bytedock/core/task.h"
 #include "bytedock/lib/queue.h"
 
 namespace bytedock {
 
-class single_pose_reader {
+class ligand_pose_reader {
 public:
-    single_pose_reader(
-        const docking_task& origin, size_t nposes_to_generate,
-        blocking_queue<std::string>& file_queue
-    ): origin_(origin), gen_factor_(nposes_to_generate), file_queue_(file_queue) {}
+    ligand_pose_reader(
+        const scoring_function_factory& sf_manager, bool include_bscore,
+        const docking_task& task_templ, blocking_queue<std::string>& file_queue,
+        size_t max_ntasks = 0  // Zero means no limitation
+    ): sf_mgr_(sf_manager), include_bscore_(include_bscore),
+       task_templ_(task_templ), file_queue_(file_queue), max_ntasks_(max_ntasks) {}
 
     void fill(blocking_queue<name_and_task>& parsed_queue);
 
@@ -37,26 +40,10 @@ private:
     void handle_json_file(const std::string& path,
                           blocking_queue<name_and_task>& parsed_queue);
 
-    const docking_task origin_;
-    size_t gen_factor_;
-    blocking_queue<std::string>& file_queue_;
-};
-
-// Read multiple poses per ligand
-class multi_pose_reader {
-public:
-    multi_pose_reader(
-        const docking_task& origin,
-        blocking_queue<std::string>& file_queue
-    ): origin_(origin), file_queue_(file_queue) {}
-
-    void fill(blocking_queue<name_and_task>& parsed_queue);
-
-private:
-    void handle_json_file(const std::string& path,
-                          blocking_queue<name_and_task>& parsed_queue);
-
-    const docking_task origin_;
+    const scoring_function_factory& sf_mgr_;
+    const bool include_bscore_;
+    const docking_task& task_templ_;
+    const size_t max_ntasks_;
     blocking_queue<std::string>& file_queue_;
 };
 

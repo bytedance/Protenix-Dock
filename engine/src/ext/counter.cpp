@@ -75,6 +75,14 @@ std::vector<size_t> perf_counter::get_time_cost() const {
     return captured;
 }
 
+static size_t get_timestamp_in_us() {
+    timeval time;
+    if (gettimeofday(&time, NULL)){
+        return 0;
+    }
+    return time.tv_sec * 1000000 + time.tv_usec;
+}
+
 step_timer::step_timer(workflow_step step): step_(step) {
     start_ = get_timestamp_in_us();
 }
@@ -84,12 +92,12 @@ step_timer::~step_timer() {
     time_counters[step_] += elapsed_us;
 }
 
-size_t step_timer::get_timestamp_in_us() {
-    timeval time;
-    if (gettimeofday(&time, NULL)){
-        return 0;
-    }
-    return time.tv_sec * 1000000 + time.tv_usec;
+manual_timer::manual_timer() {
+    start_ = get_timestamp_in_us();
+}
+
+size_t manual_timer::get_elapsed_in_us() {
+    return get_timestamp_in_us() - start_;
 }
 
 static std::unordered_map<std::thread::id, cache_reporter> reporters;

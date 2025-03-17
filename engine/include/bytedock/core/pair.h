@@ -35,6 +35,14 @@ inline void precalculate_vdw_pair(const lj_vdw* type_i, const lj_vdw* type_j,
     item.c12 = item.c6 * sigma6;
 }
 
+inline void precalculate_vdw_pair(const lj_vdw& type_i, const lj_vdw& type_j,
+                                  lj_vdw& item) {
+    param_t sigma6 = std::pow((type_i.sigma + type_j.sigma) * 0.5_r, 6_r);
+    item.sigma = 4_r * std::sqrt(type_i.epsilon * type_j.epsilon) * sigma6;  // ->c6
+    item.epsilon = item.sigma * sigma6;  // ->c12
+}
+
+// Used in `self_nonbonded_interactions::put_gradients(...)`
 inline param_t calculate_coul_pair(const param_t qq,
                                    const param_t* r_ij,
                                    const param_t ir,  // 1/distance
@@ -50,6 +58,7 @@ inline param_t calculate_coul_pair(const param_t qq,
     return qqk * ir;
 }
 
+// Used in `receptor_cache::partial_worker::populate(...)`
 inline param_t calculate_coul_pair(const param_t qi,
                                    const param_t qj,
                                    const param_t* r_ij,
@@ -66,6 +75,7 @@ inline param_t calculate_coul_pair(const param_t qi,
     return safe_divide(qi_qj, distance) * kCoulombFactor;
 }
 
+// Used in `self_nonbonded_interactions::put_gradients(...)`
 inline param_t calculate_vdw_pair(const param_t c6,
                                   const param_t c12,
                                   const param_t* r_ij,
@@ -85,6 +95,7 @@ inline param_t calculate_vdw_pair(const param_t c6,
     return u12 - u6;
 }
 
+// Used in `receptor_cache::partial_worker::populate(...)`
 inline param_t calculate_vdw_pair(const lj_vdw& type_i,
                                   const lj_vdw& type_j,
                                   const param_t* r_ij,
@@ -103,6 +114,17 @@ inline param_t calculate_vdw_pair(const lj_vdw& type_i,
     minus_inplace_3d(grad_i.xyz, grad);
     add_inplace_3d(grad_j.xyz, grad);
     return (u12 - u6) * fused;
+}
+
+// Used in `mm_interaction_vdw_energy::report(...)`
+inline param_t calculate_vdw_pair(const param_t c6, const param_t c12,
+                                  const param_t distance, const param_t cutoff) {
+    param_t ir = safe_divide(1_r, distance);
+    param_t ir2 = MATH_SQUARE_SCALAR(ir);
+    param_t ir6 = MATH_CUBE_SCALAR(ir2);
+    ir = c6 * ir6;  // Used as `u6`
+    ir2 = c12 * MATH_SQUARE_SCALAR(ir6);  // Used as `u12`
+    return clamp(ir2 - ir, -cutoff, cutoff);
 }
 
 #ifdef ENABLE_SIMD_AVX2
@@ -189,6 +211,75 @@ static void calculate_nb_pairs(const std::vector<nonbonded_atom_pair>& pairs,
     }
     m_coul_e += simd_reduce(coul_e);
     m_vdw_e += simd_reduce(vdw_e);
+}
+
+// Used in `mm_interaction_vdw_energy::report(...)`
+static param_t calculate_vdw_pairs(const param_t* lxyz, const param_t* rcoords,
+                                   const param_t* distance_map,  // Maybe nullptr
+                                   const std::vector<lj_vdw>& params,
+                                   const param_t cutoff,
+                                   const size_t offset, const size_t npairs) {
+    simd_real xi(lxyz[0]), yi(lxyz[1]), zi(lxyz[2]), lower(-cutoff), upper(cutoff);
+    simd_real vdw_e(0_r);
+
+    // Variables for SIMD
+    alignas(BDOCK_SIMD_ALIGNMENT) index_t m_aj[BDOCK_SIMD_REAL_WIDTH];
+    alignas(BDOCK_SIMD_ALIGNMENT) param_t m_c6[BDOCK_SIMD_REAL_WIDTH];
+    alignas(BDOCK_SIMD_ALIGNMENT) param_t m_c12[BDOCK_SIMD_REAL_WIDTH];
+
+    // Calculate by pack
+    size_t idx = 0;
+    const size_t limit = npairs < BDOCK_SIMD_REAL_WIDTH
+                       ? 0 : (npairs - BDOCK_SIMD_REAL_WIDTH + 1);
+    for (; idx < limit; idx += BDOCK_SIMD_REAL_WIDTH) {
+        for (size_t s = 0, iu = idx; s < BDOCK_SIMD_REAL_WIDTH; ++s, ++iu) {
+            auto& item = params[offset + iu];
+            m_aj[s] = iu;
+            m_c6[s] = item.sigma;
+            m_c12[s] = item.epsilon;
+        }
+
+        // Calculate inverse distance
+        simd_real rinv;
+        if (distance_map == nullptr) {
+            simd_real xj, yj, zj;
+            simd_loadu_xyz(rcoords, m_aj, xj, yj, zj);
+            auto dx = xj - xi;
+            auto dy = yj - yi;
+            auto dz = zj - zi;
+            rinv = simd_invsqrt(dx*dx + dy*dy + dz*dz);
+        } else {
+            auto dist = simd_loadu(distance_map + offset + idx);
+            rinv = simd_rcp(dist);
+        }
+        auto rinv2 = rinv * rinv;
+        auto rinv6 = rinv2 * rinv2 * rinv2;
+
+        // Calculate the VDW part
+        rinv2 = simd_load(m_c6) * rinv6;  // Used as u6
+        auto u12 = simd_load(m_c12) * rinv6 * rinv6;
+        auto clamped = simd_min(simd_max(u12 - rinv2, lower), upper);
+        vdw_e = clamped + vdw_e;
+    }
+
+    // Calculate by scalar
+    param_t energy = simd_reduce(vdw_e);
+    if (distance_map == nullptr) {
+        param_t distance;
+        for (; idx < npairs; ++idx) {
+            auto& fused = params[offset + idx];
+            distance = get_distance_3d(lxyz, rcoords + idx * 3);
+            energy += calculate_vdw_pair(fused.sigma, fused.epsilon,  // c6 & c12
+                                        distance, cutoff);
+        }
+    } else {
+        for (; idx < npairs; ++idx) {
+            auto& fused = params[offset + idx];
+            energy += calculate_vdw_pair(fused.sigma, fused.epsilon,  // c6 & c12
+                                         distance_map[offset + idx], cutoff);
+        }
+    }
+    return energy;
 }
 #endif
 

@@ -68,6 +68,14 @@ static inline simd_double operator*(simd_double a, simd_double b) {
     return { _mm256_mul_pd(a.internal_, b.internal_) };
 }
 
+static inline simd_double simd_max(simd_double a, simd_double b) {
+    return { _mm256_max_pd(a.internal_, b.internal_) };
+}
+
+static inline simd_double simd_min(simd_double a, simd_double b) {
+    return { _mm256_min_pd(a.internal_, b.internal_) };
+}
+
 // a*b+c
 static inline simd_double simd_fma(simd_double a, simd_double b, simd_double c) {
     return { _mm256_fmadd_pd(a.internal_, b.internal_, c.internal_) };
@@ -76,6 +84,16 @@ static inline simd_double simd_fma(simd_double a, simd_double b, simd_double c) 
 // a*b-c
 static inline simd_double simd_fms(simd_double a, simd_double b, simd_double c) {
     return { _mm256_fmsub_pd(a.internal_, b.internal_, c.internal_) };
+}
+
+// Approximate 1/x
+static inline simd_double simd_rcp(simd_double x) {
+    __m256d rcp = _mm256_cvtps_pd(_mm_rcp_ps(_mm256_cvtpd_ps(x.internal_)));
+
+    // Apply 2-round Newton's method
+    __m256d two = _mm256_set1_pd(2.0f);
+    rcp = _mm256_mul_pd(rcp, _mm256_fnmadd_pd(x.internal_, rcp, two));
+    return { _mm256_mul_pd(rcp, _mm256_fnmadd_pd(x.internal_, rcp, two)) };
 }
 
 // native 1/sqrt(x)

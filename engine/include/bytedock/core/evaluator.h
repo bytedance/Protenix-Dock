@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include "bytedock/core/factory.h"
 #include "bytedock/core/task.h"
 #include "bytedock/lib/queue.h"
 
@@ -26,17 +25,14 @@ namespace bytedock {
 class scoring_evaluator {
 public:
     explicit scoring_evaluator(
-        const scoring_function_factory& sf_manager,
-        bool include_bscore,
         blocking_queue<name_and_task>& in_queue
-    ) : sf_mgr_(sf_manager), task_queue_(in_queue) {}
+    ) : task_queue_(in_queue) {}
     void fill(blocking_queue<name_and_report>& out_queue);
 
 private:
     void calculate_scores(std::string& name, binding_input& in,
                           blocking_queue<name_and_report>& out_queue);
 
-    const scoring_function_factory& sf_mgr_;
     blocking_queue<name_and_task>& task_queue_;
 };
 
