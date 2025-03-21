@@ -56,7 +56,7 @@ void ligand_pose_reader::handle_json_file(
     if (include_bscore_) {
         step_timer st(EVALUATE_AFFINITY_SCORE_STEP);
         bscorer = std::make_shared<root_scorer>(sf_mgr_.get_affinity_ranking());
-        pscorer->bind_to_system(receptor_ffdata, ligand->get_ffdata());
+        bscorer->bind_to_system(receptor_ffdata, ligand->get_ffdata());
     }
 
     // Used by `mc_prune_energy_threshold` in Monte-Carlo searching
