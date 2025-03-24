@@ -4,6 +4,8 @@ This repository hosts the source code for our work "Protenix-Dock: An accurate a
 
 For more information about the implementation and the performance of Protenix-Dock, see our [technical report](ProtenixDock_Technical_Report.pdf).
 
+🔍 Protenix-Dock is a classical protein-ligand docking method designed for rigid docking tasks. For our deep learning complex structure prediction model, see [Protenix](https://github.com/bytedance/Protenix).
+
 ## Features
 
 ✨ Advanced docking conformation sampling.
