@@ -21,7 +21,6 @@ from io import StringIO
 
 import MDAnalysis as mda
 import numpy as np
-import torch
 
 from pxdock.common import get_logger, kWorkDir, my_random_string
 from pxdock.common.constants import ELEMENTS_TO_ATOMIC_NUMBERS
@@ -139,6 +138,9 @@ class ReceptorParser:
         # TODO flexible residues
         self.update_ffdata_mm_idx(self.rotatable_h)
 
+        # convert after filtering — avoids converting ~2M nonbonded pairs that were just removed
+        self.ffdata = convert_value_to_list(self.ffdata)
+
         self.hydroph_atoms, _ = self.find_interaction("vina_hydrophobic")
         self.hbond_acc_atoms, _ = self.find_interaction("vina_acceptor")
         self.hbond_don_h_atoms, self.hbond_don_h_atom_names = self.find_interaction(
@@ -225,23 +227,40 @@ class ReceptorParser:
         self.ffdata["rotatable_h_atomidx"] = self.rotatable_h
 
     def update_ffdata_mm_idx(self, movable):
+        movable_set = set(movable)
+
         def update_mm_idx_by_key(idx_key, param_keys=[]):
             if len(param_keys) > 0:
                 for param_key in param_keys:
                     self.ffdata[param_key] = [
                         self.ffdata[param_key][i]
                         for i in range(len(self.ffdata[idx_key]))
-                        if any(j in movable for j in self.ffdata[idx_key][i])
+                        if any(j in movable_set for j in self.ffdata[idx_key][i])
                     ]
             self.ffdata[idx_key] = [
-                idx for idx in self.ffdata[idx_key] if any(j in movable for j in idx)
+                idx
+                for idx in self.ffdata[idx_key]
+                if any(j in movable_set for j in idx)
             ]
             if len(param_keys) > 0:
                 for param_key in param_keys:
                     assert len(self.ffdata[param_key]) == len(self.ffdata[idx_key])
 
-        update_mm_idx_by_key("FF_NonbondedAll_atomidx")
-        update_mm_idx_by_key("FF_Nonbonded14_atomidx")
+        def update_pairwise_key_np(idx_key):
+            """Vectorized filter for 2-column pair lists (NonbondedAll/14)."""
+            pairs = self.ffdata[idx_key]
+            if not pairs:
+                return
+            arr = np.array(pairs, dtype=np.int64)
+            movable_arr = np.array(sorted(movable_set), dtype=np.int64)
+            # boolean mask: True if either atom in pair is in movable_set
+            mask = (
+                np.isin(arr[:, 0], movable_arr) | np.isin(arr[:, 1], movable_arr)
+            )
+            self.ffdata[idx_key] = arr[mask].tolist()
+
+        update_pairwise_key_np("FF_NonbondedAll_atomidx")
+        update_pairwise_key_np("FF_Nonbonded14_atomidx")
         update_mm_idx_by_key("FF_Bonds_atomidx", ["FF_Bonds_k", "FF_Bonds_length"])
         update_mm_idx_by_key("FF_Angles_atomidx", ["FF_Angles_k", "FF_Angles_angle"])
         update_mm_idx_by_key(
@@ -280,8 +299,8 @@ class ReceptorParser:
         # step 4: parse ffdata from parmed object
         logger.info("parsing ffdata and xyz from parmed object")
         ffdata, xyz = parm_to_ffdata(parm)
-        # transform to list
-        ffdata = convert_value_to_list(ffdata)
+        # NOTE: convert_value_to_list is deferred to after update_ffdata_mm_idx
+        # in __init__ to avoid converting ~2M nonbonded pairs that get filtered out
         logger.info("parse ffdata from parmed object finished")
         return gmx_gro, ffdata, xyz
 
@@ -460,16 +479,14 @@ class ReceptorParser:
         ), f"atomidx keys' number error : {len(update_keys)} v.s. 12"
         shift_num = receptor_atom_num
         for update_key in update_keys:
-            new_data = torch.tensor(cofactor_data["ffdata"][update_key]) + shift_num
+            new_data = np.array(cofactor_data["ffdata"][update_key]) + shift_num
             self.ffdata[update_key].extend(new_data.tolist())
 
         # update pair between old and new
         cofactor_atomidx = sorted(
             set(
-                [
-                    atom[0] + receptor_atom_num
-                    for atom in cofactor_data["ffdata"]["FF_vdW_atomidx"]
-                ]
+                atom[0] + receptor_atom_num
+                for atom in cofactor_data["ffdata"]["FF_vdW_atomidx"]
             )
         )
         new_nobond_pairs = [
@@ -490,11 +507,11 @@ class ReceptorParser:
         self.ffdata["FF_vdW_paraidx"].extend(cofactor_data["ffdata"]["FF_vdW_paraidx"])
 
         # update xyz
-        self.xyz = np.concatenate([self.xyz, cofactor_data["xyz"][0]], axis=0)
+        self.xyz = np.concatenate((self.xyz, cofactor_data["xyz"][0]), axis=0)
 
         # update bond_index
         shift_num = receptor_atom_num
-        new_bond_index = torch.tensor(cofactor_data["bond_index"]) + shift_num
+        new_bond_index = np.array(cofactor_data["bond_index"]) + shift_num
         self.bond_index.extend(new_bond_index.tolist())
 
         # update is_rotatable

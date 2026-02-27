@@ -29,7 +29,6 @@
 
 from meeko import MoleculePreparation, PDBQTMolecule
 from rdkit import Chem
-from rdkit.Geometry import Point3D
 
 
 class MyPDBQTMolecule(PDBQTMolecule):
@@ -66,7 +65,7 @@ class MyPDBQTMolecule(PDBQTMolecule):
         for i in range(n_atoms):
             pdbqt_index = index_map[i + 1] - 1
             x, y, z = self._positions[self._current_pose][pdbqt_index, :]
-            conf.SetAtomPosition(i, Point3D(x, y, z))
+            conf.SetAtomPosition(i, (x, y, z))
             pdbqt_index_to_rdkit_index[pdbqt_index] = i
 
         conf_id = mol.AddConformer(conf)
@@ -90,7 +89,7 @@ class MyPDBQTMolecule(PDBQTMolecule):
                 if h_rdkit_index not in used_h:
                     break
             used_h.append(h_rdkit_index)
-            conf.SetAtomPosition(h_rdkit_index, Point3D(x, y, z))
+            conf.SetAtomPosition(h_rdkit_index, (x, y, z))
             pdbqt_index_to_rdkit_index[h_pdbqt_index] = h_rdkit_index
         # sort by pdbqt_index
         pdbqt_index_to_rdkit_index = dict(

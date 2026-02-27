@@ -58,25 +58,32 @@ void serial_optimizer::fill(blocking_queue<name_and_task>& out_queue) {
     out_queue.close();
 }
 
+inline void flat_gradients_into(
+    const std::vector<param_t>& torsion_gradient,
+    const molecule_pose& ligand_gradient,
+    std::vector<param_t>& out
+) {
+    const size_t needed = torsion_gradient.size() + ligand_gradient.size() * 3;
+    if (out.size() != needed) out.resize(needed);
+    size_t offset = 0;
+    for (const auto& item: ligand_gradient) {
+        out[offset] = item.xyz[0];
+        out[offset + 1] = item.xyz[1];
+        out[offset + 2] = item.xyz[2];
+        offset += 3;
+    }
+    for (const auto& item : torsion_gradient) {
+        out[offset] = item;
+        offset++;
+    }
+}
+
 inline std::vector<param_t> flat_gradients(
     const std::vector<param_t>& torsion_gradient,
     const molecule_pose& ligand_gradient
 ) {
     std::vector<param_t> merged;
-    merged.resize(torsion_gradient.size() + ligand_gradient.size() * 3);
-    size_t offset = 0;
-    for (const auto& item: ligand_gradient) {
-        merged[offset] = item.xyz[0];
-        offset++;
-        merged[offset] = item.xyz[1];
-        offset++;
-        merged[offset] = item.xyz[2];
-        offset++;
-    }
-    for (const auto& item : torsion_gradient) {
-        merged[offset] = item;
-        offset++;
-    }
+    flat_gradients_into(torsion_gradient, ligand_gradient, merged);
     return merged;
 }
 
@@ -101,6 +108,11 @@ inline std::vector<param_t> get_negative(const std::vector<param_t>& vin) {
     return vout;
 }
 
+inline void negate_into(std::vector<param_t>& out, const std::vector<param_t>& vin) {
+    out.resize(vin.size());
+    for (size_t i = 0; i < vin.size(); i++) out[i] = -vin[i];
+}
+
 inline std::vector<param_t> minus(const std::vector<param_t>& left,
                                   const std::vector<param_t>& right) {
     std::vector<param_t> vout(left.size());
@@ -113,6 +125,12 @@ inline std::vector<param_t> scale(const std::vector<param_t>& vin,
     std::vector<param_t> vout(vin.size());
     for (size_t i = 0; i < vout.size(); i++) vout[i] = vin[i] * factor;
     return vout;
+}
+
+inline void scale_into(std::vector<param_t>& out, const std::vector<param_t>& vin,
+                        const param_t factor) {
+    out.resize(vin.size());
+    for (size_t i = 0; i < vin.size(); i++) out[i] = vin[i] * factor;
 }
 
 inline param_t dot_product(const std::vector<param_t>& left,
@@ -163,11 +181,11 @@ public:
         add_grad(t, d, rt_, lxyz_);
         bsi_.reset_gradients(tg_, lg_);
         param_t energy = bsi_.put_gradients(rt_, lxyz_, tg_, lg_);
-        flat_grad = flat_gradients(tg_, lg_);  // Move
+        flat_gradients_into(tg_, lg_, flat_grad);
         ++evals_;
-        rt_ = init_rt_;
-        lxyz_ = init_lxyz_;
-        bsi_.reset_gradients(tg_, lg_);
+        // Restore original state
+        std::copy(init_rt_.begin(), init_rt_.end(), rt_.begin());
+        std::copy(init_lxyz_.begin(), init_lxyz_.end(), lxyz_.begin());
         return energy;
     }
 
@@ -442,7 +460,8 @@ bool lbfgs_step::apply(binding_system_interactions& model, optimized_result& out
     out.nevals = 1;
 
     // Meet optimal condition
-    std::vector<param_t> flat_grad = flat_gradients(torsion_gradient, ligand_gradient);
+    std::vector<param_t> flat_grad;
+    flat_gradients_into(torsion_gradient, ligand_gradient, flat_grad);
     if (get_abs_max(flat_grad) < tolerance_grad_) return true;
 
     // Decalre variables for tracing
@@ -466,7 +485,7 @@ bool lbfgs_step::apply(binding_system_interactions& model, optimized_result& out
             high_grad_change = get_abs_max(y) > 1e8_r;
         }
         if (n_iter == 1 || high_grad_change) {
-            d = get_negative(flat_grad);  // Move assignment
+            negate_into(d, flat_grad);  // Reuse d buffer
             old_dirs.clear();
             old_stps.clear();
             ro.clear();
@@ -498,14 +517,14 @@ bool lbfgs_step::apply(binding_system_interactions& model, optimized_result& out
             num_old = old_dirs.size();
 
             // # iteration in L-BFGS loop collapsed to use just one buffer
-            q = get_negative(flat_grad);
+            negate_into(q, flat_grad);
             for (int i = num_old - 1; i > -1; i--) {
                 al[i] = dot_product(old_stps[i], q) * ro[i];
                 add_inplace(q, old_dirs[i], -al[i]);
             }
 
             // Multiply by initial Hessian to get the final direction
-            d = scale(q, H_diag);
+            scale_into(d, q, H_diag);
             for (size_t i = 0; i < num_old; i++) {
                 be_i = dot_product(old_dirs[i], d) * ro[i];
                 add_inplace(d, old_stps[i], al[i] - be_i);
@@ -544,8 +563,7 @@ bool lbfgs_step::apply(binding_system_interactions& model, optimized_result& out
             converged = true;
             break;
         }
-        s = scale(d, t);
-        if (get_abs_max(s) <= tolerance_change_) {
+        if (get_abs_max(d) * std::abs(t) <= tolerance_change_) {
             converged = true;
             break;
         }

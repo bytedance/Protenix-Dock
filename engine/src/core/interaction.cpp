@@ -17,6 +17,7 @@
 
 #include "bytedock/core/interaction.h"
 
+#include "bytedock/core/cell_list.h"
 #include "bytedock/core/constant.h"
 #include "bytedock/core/pair.h"
 #include "bytedock/ext/counter.h"
@@ -116,7 +117,7 @@ param_t fourier_dihedral_interaction::put_gradients(
     return energy;
 }
 
-#ifdef ENABLE_SIMD_AVX2
+#ifdef BDOCK_HAS_SIMD
 param_t self_nonbonded_interactions::put_gradients(
     const molecule_pose& mol_xyz,
     const force_field_params& mol_ffdata,
@@ -143,9 +144,9 @@ param_t self_nonbonded_interactions::put_gradients(
 }
 
 param_t self_nonbonded_interactions::put_gradients_nosimd(
-#else
+#else  // !BDOCK_HAS_SIMD
 param_t self_nonbonded_interactions::put_gradients(
-#endif
+#endif  // BDOCK_HAS_SIMD
     const molecule_pose& mol_xyz,
     const force_field_params& mol_ffdata,
     molecule_pose& xyz_gradient
@@ -215,6 +216,29 @@ inter_molecular_interactions::inter_molecular_interactions() {
     reporter_ = cache_counter::singleton().get_or_create();
 }
 
+void inter_molecular_interactions::build_cell_list(
+    const molecule_pose& receptor_xyz, param_t cutoff
+) {
+    bruteforce_cells_.build(receptor_xyz, cutoff);
+}
+
+void inter_molecular_interactions::cache_excluded_data(
+    const receptor_cache* cache,
+    const force_field_params& receptor_ffdata
+) {
+    if (!cache || excl_data_cached_) return;
+    const auto& vec = cache->get_excluded_atoms_vec();
+    const size_t n = vec.size();
+    excl_indices_ = vec;
+    excl_charges_.resize(n);
+    excl_vdw_params_.resize(n);
+    for (size_t i = 0; i < n; i++) {
+        excl_charges_[i] = receptor_ffdata.partial_charges[vec[i]];
+        excl_vdw_params_[i] = receptor_ffdata.vdw_params[vec[i]];
+    }
+    excl_data_cached_ = true;
+}
+
 param_t inter_molecular_interactions::put_gradients(
     const molecule_pose& receptor_xyz,
     const force_field_params& receptor_ffdata,
@@ -242,7 +266,24 @@ param_t inter_molecular_interactions::put_gradients(
             } else {
                 reporter_->miss();
             }
-            for (const auto& j : nonbonded_cache->get_excluded_atoms()) {
+            // Use pre-gathered contiguous data for cache locality
+            const size_t n_excl = excl_indices_.size();
+            for (size_t ei = 0; ei < n_excl; ei++) {
+                const index_t j = excl_indices_[ei];
+                minus_3d(receptor_xyz[j].xyz, ligand_xyz[i].xyz, r_ij);  // i->j
+                distance = get_norm_3d(r_ij);
+                energy += calculate_coul_pair(
+                    q_i, excl_charges_[ei],
+                    r_ij, distance, 1., ligand_gradient[i], receptor_gradient[j]
+                );
+                energy += calculate_vdw_pair(
+                    type_i, excl_vdw_params_[ei], r_ij, distance, 1.,
+                    ligand_gradient[i], receptor_gradient[j]
+                );
+            }
+        } else if (!bruteforce_cells_.empty()) {
+            // Cell-list accelerated brute force
+            bruteforce_cells_.for_each_neighbor(ligand_xyz[i].xyz, [&](index_t j) {
                 minus_3d(receptor_xyz[j].xyz, ligand_xyz[i].xyz, r_ij);  // i->j
                 distance = get_norm_3d(r_ij);
                 energy += calculate_coul_pair(
@@ -250,13 +291,14 @@ param_t inter_molecular_interactions::put_gradients(
                     r_ij, distance, 1., ligand_gradient[i], receptor_gradient[j]
                 );
                 energy += calculate_vdw_pair(
-                    type_i, receptor_ffdata.vdw_params[j], r_ij, distance, 1.,
-                    ligand_gradient[i], receptor_gradient[j]
+                    type_i, receptor_ffdata.vdw_params[j],
+                    r_ij, distance, 1., ligand_gradient[i], receptor_gradient[j]
                 );
-            }
+            });
         } else {  // Apply the brute-force calculation
+            const param_t* li_xyz = ligand_xyz[i].xyz;
             for (size_t j = 0; j < receptor_xyz.size(); j++) {
-                minus_3d(receptor_xyz[j].xyz, ligand_xyz[i].xyz, r_ij);  // i->j
+                minus_3d(receptor_xyz[j].xyz, li_xyz, r_ij);  // i->j
                 distance = get_norm_3d(r_ij);
                 energy += calculate_coul_pair(
                     q_i, receptor_ffdata.partial_charges[j],
@@ -269,17 +311,40 @@ param_t inter_molecular_interactions::put_gradients(
             }
         }
     }
+
+    // Box penalty for brute-force path (no cache)
+    if (!nonbonded_cache && has_box_penalty_) {
+        for (size_t i = 0; i < ligand_xyz.size(); i++) {
+            for (size_t dim = 0; dim < 3; dim++) {
+                if (ligand_xyz[i].xyz[dim] < bc_.init_xyz[dim]) {
+                    energy += (bc_.init_xyz[dim] - ligand_xyz[i].xyz[dim]) * penalty_slope_;
+                    ligand_gradient[i].xyz[dim] -= penalty_slope_;
+                } else if (ligand_xyz[i].xyz[dim] > bc_.oppo_xyz[dim]) {
+                    energy += (ligand_xyz[i].xyz[dim] - bc_.oppo_xyz[dim]) * penalty_slope_;
+                    ligand_gradient[i].xyz[dim] += penalty_slope_;
+                }
+            }
+        }
+    }
+
     return energy;
 }
 
 binding_system_interactions::binding_system_interactions(
     std::shared_ptr<torsional_receptor> receptor,
     std::shared_ptr<free_ligand> ligand,
-    std::shared_ptr<receptor_cache> cache
+    std::shared_ptr<receptor_cache> cache,
+    const box_config* box_penalty,
+    param_t penalty_slope
 ) : receptor_(receptor), ligand_(ligand), cache_(cache) {
     receptor_xyz_ = receptor_->get_positions();  // Copy init coordinates
     receptor_gradient_.resize(receptor_xyz_.size());
     rotation_jacobian_.resize(receptor_->num_movable_atoms());
+    // Pre-gather excluded atom data for cache-friendly access in hot loop
+    inter_.cache_excluded_data(cache_.get(), receptor_->get_ffdata());
+    if (!cache_ && box_penalty) {
+        inter_.set_box_penalty(*box_penalty, penalty_slope);
+    }
 }
 
 const atom_position kZeroPoint = {0., 0., 0.};

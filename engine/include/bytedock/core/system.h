@@ -121,7 +121,7 @@ struct atom_position {
     param_t xyz[3];
 };
 
-#ifdef ENABLE_SIMD_AVX2
+#ifdef BDOCK_HAS_SIMD
 typedef simd_vector<atom_position> molecule_pose;
 #else
 typedef std::vector<atom_position> molecule_pose;

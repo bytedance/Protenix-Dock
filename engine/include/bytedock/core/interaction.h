@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include "bytedock/core/cell_list.h"
 #include "bytedock/core/data.h"
 #include "bytedock/core/grid.h"
 #include "bytedock/ext/counter.h"
@@ -55,7 +56,7 @@ public:
     param_t put_gradients(const molecule_pose& mol_xyz,
                           const force_field_params& mol_ffdata,
                           molecule_pose& xyz_gradient);
-#if ENABLE_SIMD_AVX2  // For testing
+#if BDOCK_HAS_SIMD  // For testing
     param_t put_gradients_nosimd(const molecule_pose& mol_xyz,
                                  const force_field_params& mol_ffdata,
                                  molecule_pose& xyz_gradient);
@@ -94,8 +95,32 @@ public:
                           molecule_pose& receptor_gradient,
                           molecule_pose& ligand_gradient);
 
+    void build_cell_list(const molecule_pose& receptor_xyz, param_t cutoff = 10.0);
+
+    // Pre-gather excluded atom data for cache-friendly access in hot loop
+    void cache_excluded_data(const receptor_cache* cache,
+                             const force_field_params& receptor_ffdata);
+
+    void set_box_penalty(const box_config& bc, param_t slope) {
+        bc_ = bc;
+        penalty_slope_ = slope;
+        has_box_penalty_ = true;
+    }
+
 private:
     cache_reporter* reporter_;
+    cell_list bruteforce_cells_;
+
+    // Pre-gathered excluded atom data (contiguous for cache locality)
+    bool excl_data_cached_ = false;
+    std::vector<index_t> excl_indices_;
+    std::vector<param_t> excl_charges_;
+    std::vector<lj_vdw> excl_vdw_params_;
+
+    // Box penalty for brute-force path (no cache)
+    bool has_box_penalty_ = false;
+    box_config bc_;
+    param_t penalty_slope_ = 0_r;
 };
 
 // bytedock.score_function.byte_mmenergy.MMTotalEnergy
@@ -104,7 +129,9 @@ public:
     explicit binding_system_interactions(
         std::shared_ptr<torsional_receptor> receptor,
         std::shared_ptr<free_ligand> ligand,
-        std::shared_ptr<receptor_cache> cache = nullptr
+        std::shared_ptr<receptor_cache> cache = nullptr,
+        const box_config* box_penalty = nullptr,
+        param_t penalty_slope = 0_r
     );
 
     param_t put_gradients(const std::vector<param_t>& receptor_torsions,

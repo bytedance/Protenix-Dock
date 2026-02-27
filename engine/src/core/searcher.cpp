@@ -45,6 +45,7 @@ void monte_carlo_searcher::fill(blocking_queue<name_and_task>& out_queue) {
 
 molecule_pose monte_carlo_searcher::randomize(
     const free_ligand& ligand, const size_t pose_id,
+    const size_t walker_id,
     const torsional_receptor& receptor,
     const leaf_scorer& vdw_calc, random_generator& rdgen
 ) {
@@ -57,17 +58,42 @@ molecule_pose monte_carlo_searcher::randomize(
     auto& receptor_ffdata = receptor.get_ffdata();
     auto& ligand_xyz = ligand.get_pose(pose_id);
     auto& ligand_ffdata = ligand.get_ffdata();
+
+    // Super-Fibonacci only helps when enough walkers cover SO(3)
+    const bool use_fibonacci = num_poses_ >= 6;
+
+    // Fix 1: Deterministic orientation via super-Fibonacci spiral
+    if (use_fibonacci) {
+        super_fibonacci_quaternion(walker_id, num_poses_, quaternion.abcd);
+        get_rotation_matrix(quaternion, orientation);
+    }
+
+    // Fix 2: Shrink center placement box by gyration radius (always on)
+    atom_position ref_center = calculate_geometric_center(ligand_xyz);
+    param_t r_gyr = calculate_gyration_radius(ligand_xyz, ref_center);
+    param_t shrunk_init[3], shrunk_oppo[3];
+    for (size_t d = 0; d < 3; d++) {
+        shrunk_init[d] = bc_.init_xyz[d] + r_gyr;
+        shrunk_oppo[d] = bc_.oppo_xyz[d] - r_gyr;
+        if (shrunk_init[d] >= shrunk_oppo[d]) {
+            shrunk_init[d] = bc_.init_xyz[d];
+            shrunk_oppo[d] = bc_.oppo_xyz[d];
+        }
+    }
+
     size_t num = 0;
     while (true) {
-        rdgen.random_in_box(bc_.init_xyz, bc_.oppo_xyz, new_center.xyz);
-        rdgen.random_orientation(quaternion.abcd);
+        rdgen.random_in_box(shrunk_init, shrunk_oppo, new_center.xyz);
+        if (!use_fibonacci) {
+            rdgen.random_orientation(quaternion.abcd);
+            get_rotation_matrix(quaternion, orientation);
+        }
         for (size_t i = 0; i < torsions.size(); ++i) {
             if (pose_id == 0) {
                 torsions[i] = rdgen.uniform_torsion();
             }
 
         }
-        get_rotation_matrix(quaternion, orientation);
         candidate = ligand.apply_parameters(ligand_xyz, new_center,
                                             orientation, torsions);  // Move
         ++num;
@@ -116,11 +142,14 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
                       << " will generate the initial conformer from the " << source_idx
                       << "-th pose in the ligand file";
         }
-        out.ligand_xyz = randomize(*in.ligand, source_idx, *in.receptor,
+        out.ligand_xyz = randomize(*in.ligand, source_idx, in.pose_id,
+                                   *in.receptor,
                                    pp.get_inter_molecular_vdw_energy(), rg);  // Move
     }
     out.torsions.resize(in.receptor->num_torsions(), 0_r);
-    binding_system_interactions model(in.receptor, in.ligand, in.cache);
+    binding_system_interactions model(in.receptor, in.ligand, in.cache,
+                                      in.cache ? nullptr : &bc_,
+                                      penalty_slope_);
     bool converged = full_step_.apply(model, out);
     out.receptor_xyz = in.receptor->apply_parameters(out.torsions);  // Move
     {
@@ -134,6 +163,9 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
     molecule_pose tmp_ligand_gradient;
     model.init_gradients(tmp_torsion_gradient, tmp_ligand_gradient);
 
+    // Pre-allocate torsion buffer for mutate_inplace
+    std::vector<param_t> torsion_buf(in.ligand->num_torsions(), 0_r);
+
     // Walk in conformer space
     if (check_all_atoms_in_box(out.ligand_xyz)) {
         optimized_result tmp(out);  // Copy
@@ -141,7 +173,7 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
         index_t total_nevals = out.nevals;
         for (size_t step = 0; step < max_nsteps_; ++step) {
             cdd = tmp;  // Copy
-            if (!mutate_inplace(*in.ligand, rg, cdd.ligand_xyz)) {
+            if (!mutate_inplace(*in.ligand, rg, cdd.ligand_xyz, torsion_buf)) {
                 LOG_WARNING << "Monte-Carlo searcher#" << in.pose_id << " skipped "
                             << "orientation mutation at step#" << step << " due to too "
                             << "small gyration radius!";
@@ -202,7 +234,8 @@ bool monte_carlo_searcher::mutate_and_optimize(binding_input& in, optimized_resu
 
 bool monte_carlo_searcher::mutate_inplace(const free_ligand& ligand,
                                           random_generator& rdgen,
-                                          molecule_pose& ligand_xyz) {
+                                          molecule_pose& ligand_xyz,
+                                          std::vector<param_t>& torsion_buf) {
     int which = rdgen.uniform_int(0, ligand.num_torsions() + 1);
     vector_3d delta;
 
@@ -226,12 +259,12 @@ bool monte_carlo_searcher::mutate_inplace(const free_ligand& ligand,
         get_rotation_matrix(delta, gr, orientation);
     }
 
-    // Torsions
-    std::vector<param_t> torsions(ligand.num_torsions(), 0_r);
-    if (which > 1) torsions[which - 2] = rdgen.uniform_torsion();
+    // Torsions — reuse pre-allocated buffer, zero it
+    std::fill(torsion_buf.begin(), torsion_buf.end(), 0_r);
+    if (which > 1) torsion_buf[which - 2] = rdgen.uniform_torsion();
 
     // Update ligand conformer
-    auto new_xyz = ligand.apply_parameters(ligand_xyz, center, orientation, torsions);
+    auto new_xyz = ligand.apply_parameters(ligand_xyz, center, orientation, torsion_buf);
     ligand_xyz.swap(new_xyz);
     return true;
 }

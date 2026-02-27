@@ -11,7 +11,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+  set(CMAKE_BUILD_TYPE "Release")
+endif()
+
+# Enable fast-math, LTO, and native arch for Release builds
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  add_compile_options(-ffast-math -march=native)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
 
 option(BDOCK_DOUBLE "Use double precision for parameters (maybe slower, better for debug)." ON)
@@ -22,7 +28,15 @@ endif()
 option(BDOCK_AVX2 "Enable SIMD acceleration using FMA & AVX2 instruction sets." OFF)
 if(BDOCK_AVX2)
   add_definitions(-DENABLE_SIMD_AVX2=1)
+  add_definitions(-DBDOCK_HAS_SIMD=1)
 endif()
+
+# Auto-detect ARM NEON (always available on AArch64)
+if(NOT BDOCK_AVX2 AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+  add_definitions(-DENABLE_SIMD_NEON=1)
+  add_definitions(-DBDOCK_HAS_SIMD=1)
+endif()
+
 
 option(BDOCK_PYSDK "If set, Build a Python module. Otherwise, build command-line binaries." OFF)
 if(BDOCK_PYSDK OR APPLE)
@@ -47,6 +61,12 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/_version.cpp
 find_package(Python3 REQUIRED COMPONENTS Development.Module)
 find_package(Boost 1.72.0 REQUIRED COMPONENTS log program_options python serialization)
 include_directories(${Boost_INCLUDE_DIRS})
+
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+  message(STATUS "OpenMP found, enabling parallel scoring")
+  add_definitions(-DBDOCK_HAS_OPENMP=1)
+endif()
 
 if(BDOCK_VETOS)
   list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
@@ -86,7 +106,12 @@ if(BDOCK_VETOS AND NOT VeTos_FOUND)
 endif()
 set_target_properties(Dock_LIBRARY PROPERTIES OUTPUT_NAME "dock")
 target_link_libraries(Dock_LIBRARY ${Boost_LOG_LIBRARY}
-                                   ${Boost_SERIALIZATION_LIBRARY})
+                                   ${Boost_SERIALIZATION_LIBRARY}
+                                   ${Boost_FILESYSTEM_LIBRARY}
+                                   ${Boost_THREAD_LIBRARY})
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(Dock_LIBRARY OpenMP::OpenMP_CXX)
+endif()
 if(BDOCK_VETOS)
   target_include_directories(Dock_LIBRARY PRIVATE ${VeTos_INCLUDE_DIRS})
   target_link_libraries(Dock_LIBRARY ${VeTos_LIBRARIES})

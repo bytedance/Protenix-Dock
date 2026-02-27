@@ -225,7 +225,7 @@ TEST(IntraMolecularTest, SelfNonbonded) {
         minus_inplace_3d(xyz_gradient[i].xyz, bias.xyz);
         check_3d(ref_gradient[i].xyz, xyz_gradient[i].xyz, 3e-3);
     }
-#ifdef ENABLE_SIMD_AVX2
+#ifdef BDOCK_HAS_SIMD
     molecule_pose normal_g(mol_xyz.size(), bias);
     double normal_e = sni.put_gradients_nosimd(mol_xyz, mol_ffdata, normal_g);
     EXPECT_NEAR(normal_e, energy, 1e-6);

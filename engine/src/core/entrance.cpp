@@ -382,7 +382,8 @@ void ReusableEngine::search(const std::string& ligand_index_file,
             LOG_TELL_THREAD_ID();
             LOG_INFO << "Searcher has started...";
             monte_carlo_searcher one(bc_, seed, max_nsteps, relax_nsteps,
-                                     mc_mmenergy_threshold, parsed_queue);
+                                     mc_mmenergy_threshold, slope,
+                                     exhaustiveness, parsed_queue);
             one.fill(pose_queue);
             LOG_INFO << "Searcher has ended.";
         });

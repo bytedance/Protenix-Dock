@@ -75,6 +75,7 @@ public:
 
     // Interactions with these atoms need be calcualted externally
     const std::unordered_set<index_t>& get_excluded_atoms() const { return excluded_; }
+    const std::vector<index_t>& get_excluded_atoms_vec() const { return excluded_vec_; }
     const box_config& get_box_config() const { return bc_; }
     void set_slope(param_t value) { slope_ = value; }
 
@@ -129,6 +130,7 @@ private:
     std::vector<val_and_grad> coul_grid_;
     std::vector<std::vector<val_and_grad> > vdw_grids_;
     std::unordered_set<index_t> excluded_;  // Movable atoms
+    std::vector<index_t> excluded_vec_;    // Sorted vector for cache-friendly iteration
     param_t slope_;
 };
 

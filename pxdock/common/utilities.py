@@ -30,7 +30,6 @@ from typing import Dict, Mapping, Tuple
 import jinja2
 import numpy as np
 import pandas as pd
-import torch
 from func_timeout import exceptions as func_timeout_exceptions
 from func_timeout import func_set_timeout
 from rdkit import Chem
@@ -43,33 +42,50 @@ logger = get_logger(__name__)
 def seed_everything(seed, deterministic=False):
     random.seed(seed)
     np.random.seed(seed)
-    torch.random.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    if deterministic:
-        torch.backends.cudnn.benchmark = False
-        # torch.backends.cudnn.deterministic=True applies to CUDA convolution operations, and nothing else.
-        torch.backends.cudnn.deterministic = True
-        # torch.use_deterministic_algorithms(True) affects all the normally-nondeterministic operations listed here https://pytorch.org/docs/stable/generated/torch.use_deterministic_algorithms.html?highlight=use_deterministic#torch.use_deterministic_algorithms
-        torch.use_deterministic_algorithms(True)
-        # https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
-        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 
 def convert_value_to_list(obj):
-    if dataclasses.is_dataclass(obj):
-        return convert_value_to_list(dataclasses.asdict(obj))
-    if isinstance(obj, (str, int, float, bool, type(None))):
+    # fast-path: primitives are by far the most common (check before is_dataclass)
+    if isinstance(obj, (int, float)):
+        return obj
+    if isinstance(obj, (str, bool, type(None))):
         return obj
     if isinstance(obj, (np.int64, np.int32)):
         return int(obj)
     if isinstance(obj, (list, tuple)):
+        if obj:
+            first = obj[0]
+            # fast-path: flat list/tuple of Python ints/floats
+            if isinstance(first, (int, float)):
+                all_primitive = True
+                for item in obj:
+                    if not isinstance(item, (int, float)):
+                        all_primitive = False
+                        break
+                if all_primitive:
+                    return list(obj) if isinstance(obj, tuple) else obj
+            # fast-path: list of fixed-size tuples/lists of ints (e.g. atom pair indices)
+            if isinstance(first, (list, tuple)) and first and isinstance(first[0], (int, float)):
+                all_nested_primitive = True
+                for sub in obj:
+                    if not isinstance(sub, (list, tuple)):
+                        all_nested_primitive = False
+                        break
+                    for item in sub:
+                        if not isinstance(item, (int, float)):
+                            all_nested_primitive = False
+                            break
+                    if not all_nested_primitive:
+                        break
+                if all_nested_primitive:
+                    return [list(sub) if isinstance(sub, tuple) else sub for sub in obj]
         return [convert_value_to_list(item) for item in obj]
     if isinstance(obj, Mapping):
         return {str(key): convert_value_to_list(obj[key]) for key in obj}
     if isinstance(obj, np.ndarray):
         return convert_value_to_list(obj.tolist())
-    if isinstance(obj, torch.Tensor):
-        return convert_value_to_list(obj.cpu().tolist())
+    if dataclasses.is_dataclass(obj):
+        return convert_value_to_list(dataclasses.asdict(obj))
     return obj
 
 
@@ -81,26 +97,6 @@ def padding(lst, idx=0):
     else:
         return lst
 
-
-def convert_ffdata_to_tensor(ffdata):
-    for k in ffdata:
-        if isinstance(ffdata[k], Mapping):
-            ffdata[k] = convert_ffdata_to_tensor(ffdata[k])
-            continue
-
-        if isinstance(ffdata[k], str):
-            continue
-
-        if isinstance(ffdata[k], torch.Tensor):  # avoid abundant convertion
-            continue
-        if "group" in k:
-            ffdata[k] = torch.Tensor(padding(ffdata[k], idx=-1))
-        else:
-            ffdata[k] = torch.Tensor(padding(ffdata[k]))
-        if "idx" in k or "index" in k or k == "atomic_numbers":
-            ffdata[k] = ffdata[k].to(torch.long)
-
-    return ffdata
 
 
 def my_random_string(string_length=10):
@@ -180,14 +176,6 @@ def modify_molecule_weights(m):
             total_cut += 35.45 - atom.GetMass()
     return total_cut
 
-
-def custom_deepcopy(obj):
-    if torch.is_tensor(obj):
-        return obj.clone()
-    elif isinstance(obj, dict):
-        return {key: custom_deepcopy(value) for key, value in obj.items()}
-    else:
-        return copy.deepcopy(obj)
 
 
 def load_json(x):

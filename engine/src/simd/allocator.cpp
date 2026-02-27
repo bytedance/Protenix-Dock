@@ -26,6 +26,8 @@ static const size_t kSimdAlignmentInBytes = 64;
 
 void* simd_allocation_policy::alloc(std::size_t bytes) {
     bytes += kSimdAlignmentInBytes;  // Pad memory at the end to avoid false sharing
+    // Round up to alignment boundary (required by macOS aligned_alloc)
+    bytes = (bytes + kSimdAlignmentInBytes - 1) & ~(kSimdAlignmentInBytes - 1);
     return std::aligned_alloc(kSimdAlignmentInBytes, bytes);
 }
 
