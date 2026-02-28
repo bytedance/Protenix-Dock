@@ -39,6 +39,8 @@ const char* VERSION_STR = \"ProtenixDock\"
 #endif
 #if ENABLE_SIMD_AVX2
                           \"+AVX2\"
+#elif ENABLE_SIMD_NEON
+                          \"+NEON\"
 #endif
                           \" ${GIT_BRANCH}@${GIT_REV}${GIT_DIFF}\";
 

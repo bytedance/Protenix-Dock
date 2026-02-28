@@ -191,14 +191,18 @@ def fix_residue_name_for_amber(residue_atoms: list) -> list:
     if new_residue_atoms[0]["residue_name"] == "HIS":
         HID = 0
         HIE = 0
+        has_nd1 = False
+        has_ne2 = False
         for atom in new_residue_atoms:
             if "ND1" in atom["name"]:
+                has_nd1 = True
                 for atom_H in new_residue_atoms:
                     if atom_H["element"] == "H":
                         dist = measure_atom_distance_pdb_record(atom, atom_H)
                         if dist < H_tol:
                             HID += 1
             if "NE2" in atom["name"]:
+                has_ne2 = True
                 for atom_H in new_residue_atoms:
                     if atom_H["element"] == "H":
                         dist = measure_atom_distance_pdb_record(atom, atom_H)
@@ -211,6 +215,9 @@ def fix_residue_name_for_amber(residue_atoms: list) -> list:
             new_name = "HIE"
         elif HID == 1 and HIE == 1:
             new_name = "HIP"
+        elif not has_nd1 or not has_ne2:
+            # Incomplete sidechain — default to HIE (most common at pH 7)
+            new_name = "HIE"
         else:
             raise ValueError(
                 f"Can not recongnize HIS, residue number: {new_residue_atoms[0]['residue_num']}"

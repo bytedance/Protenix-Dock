@@ -15,20 +15,20 @@
 
 import copy
 import warnings
-from typing import Iterable, List
+from typing import Iterable
 
 import networkx as nx
 import numpy as np
 
 
-def create_graph(bond_index, num_atoms):
+def create_graph(bond_index: list[tuple[int, int]], num_atoms: int) -> nx.Graph:
     G = nx.Graph()
     G.add_nodes_from(range(num_atoms))
     G.add_edges_from(bond_index)
     return G
 
 
-def find_tree_longest_path(tree: nx.Graph):
+def find_tree_longest_path(tree: nx.Graph) -> list[int]:
     farthest_node_1 = list(nx.bfs_tree(tree, source=list(tree.nodes())[0]))[-1]
     farthest_node_2 = list(nx.bfs_tree(tree, source=farthest_node_1))[-1]
     longest_path = nx.shortest_path(
@@ -48,12 +48,12 @@ def find_tree_center(tree):
     return center
 
 
-def next_level_traversal(tree, current_level, visited: set):
+def next_level_traversal(tree, current_level, visited: set) -> set:
     visited = set(visited)
     current_level = set(current_level)
-    next_level = set([])
+    next_level = set()
     for node in current_level:
-        neighbors = set([int(n) for n in tree.neighbors(node)])
+        neighbors = set(int(n) for n in tree.neighbors(node))
         children = neighbors - visited
         n = len(next_level)
         next_level.update(children)
@@ -63,12 +63,12 @@ def next_level_traversal(tree, current_level, visited: set):
     return next_level
 
 
-def traverse_next_level(tree: nx.graph, current_level: List, visited: set):
+def traverse_next_level(tree: nx.graph, current_level: list, visited: set):
     visited = set(visited)
     current_level = set(current_level)
     next_level = {}
     for node in current_level:
-        neighbors = set([int(n) for n in tree.neighbors(node)])
+        neighbors = set(int(n) for n in tree.neighbors(node))
         children = neighbors - visited
         parent = neighbors - children
         assert len(parent) <= 1, "Something must be wrong. The input may not be a tree."
@@ -93,8 +93,8 @@ def level_order_traversal(tree, start_level):
 class RigidFragmentTree:
     def __init__(
         self,
-        bond_index: List[List[int]],
-        is_rotatable: List[int],
+        bond_index: list[list[int]],
+        is_rotatable: list[int],
         num_atoms: int = None,
     ):
         """
@@ -177,10 +177,10 @@ class RigidFragmentTree:
     def node(self, i: int):
         return {"index": i, "atoms": self.G.nodes[i]["atoms"]}
 
-    def fragment_size(self, i: int):
+    def fragment_size(self, i: int) -> int:
         return len(self.G.nodes[i]["atoms"])
 
-    def edge(self, i: int, j: int):
+    def edge(self, i: int, j: int) -> dict:
         key = f"{i}->{j}"
         if key not in self.edge_to_bond:
             warnings.warn(f"edge ({i}, {j}) is not in the fragment quotient graph.")
@@ -192,22 +192,22 @@ class RigidFragmentTree:
             "order": self.edge_to_order[key],
         }
 
-    def neighbors(self, i: int):
+    def neighbors(self, i: int) -> list:
         return [n for n in self.G.neighbors(i)]
 
     @property
-    def nodes(self):
+    def nodes(self) -> list:
         return [self.node(i) for i in range(self.number_of_nodes)]
 
     @property
-    def edges(self):
+    def edges(self) -> list:
         return [self.edge(e[0], e[1]) for e in self.ordered_edges]
 
     def fragment(self, i: int):
         return self.G.nodes[i]["atoms"]
 
     @property
-    def fragments(self):
+    def fragments(self) -> list:
         return [self.G.nodes[i]["atoms"] for i in range(self.number_of_nodes)]
 
     @staticmethod
@@ -236,24 +236,30 @@ class RigidFragmentTree:
         for i in range(n_frags):
             Q.add_node(i, atoms=sorted(list(fragments[i])))
 
-        directed_edge_to_rot_bond = {}
-        for i in range(n_frags):
-            for j in range(i + 1, n_frags):
-                rot_bond = None
-                for edge in edge_cut:
-                    edge = [int(x) for x in edge]
-                    if edge[0] in fragments[i] and edge[1] in fragments[j]:
-                        rot_bond = [edge[0], edge[1]]
-                    if edge[1] in fragments[i] and edge[0] in fragments[j]:
-                        rot_bond = [edge[1], edge[0]]
+        # build atom -> fragment_id lookup for O(1) membership tests
+        atom_to_frag = {}
+        for frag_id, frag in enumerate(fragments):
+            for atom in frag:
+                atom_to_frag[atom] = frag_id
 
-                    if rot_bond is not None:
-                        # edge is detected
-                        break
-                if rot_bond is not None:
-                    Q.add_edge(i, j)
-                    directed_edge_to_rot_bond[f"{i}->{j}"] = [rot_bond[0], rot_bond[1]]
-                    directed_edge_to_rot_bond[f"{j}->{i}"] = [rot_bond[1], rot_bond[0]]
+        directed_edge_to_rot_bond = {}
+        for edge in edge_cut:
+            a, b = int(edge[0]), int(edge[1])
+            frag_a = atom_to_frag[a]
+            frag_b = atom_to_frag[b]
+            if frag_a == frag_b:
+                continue
+            i, j = min(frag_a, frag_b), max(frag_a, frag_b)
+            if Q.has_edge(i, j):
+                continue
+            Q.add_edge(i, j)
+            # rot_bond[0] is in fragment i, rot_bond[1] is in fragment j
+            if frag_a == i:
+                directed_edge_to_rot_bond[f"{i}->{j}"] = [a, b]
+                directed_edge_to_rot_bond[f"{j}->{i}"] = [b, a]
+            else:
+                directed_edge_to_rot_bond[f"{i}->{j}"] = [b, a]
+                directed_edge_to_rot_bond[f"{j}->{i}"] = [a, b]
 
         # make sure Q is a Tree
         assert nx.is_forest(

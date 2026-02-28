@@ -86,15 +86,15 @@ class VinaDock(object):
 
     def dock(
         self,
-        score_func="vina",
-        seed=0,
-        mode="dock",
-        exhaustiveness=32,
-        search_depth=0,
-        save_pose=True,
-        cpu=8,
-        n_poses=5,
-        energy_range=3,
+        score_func: str="vina",
+        seed: int=0,
+        mode: str="dock",
+        exhaustiveness: int=32,
+        search_depth: int=0,
+        save_pose: bool=True,
+        cpu: int=8,
+        n_poses: int=5,
+        energy_range: int=3,
     ):
         if score_func != "vina":
             raise ValueError("VinaDock only support vina score function.")
@@ -185,7 +185,7 @@ class VinaDock(object):
         return conforms, scores, poses, pose_i_scores, dock_seconds, errors
 
 
-def prepare_ligand_pdbqt(sdf_path, nconfs=-1):
+def prepare_ligand_pdbqt(sdf_path: str, nconfs: int=-1) -> tuple:
     lig_properties = []
     lig_pdbqts = []
     errors = []
@@ -233,14 +233,14 @@ def prepare_ligand_pdbqt(sdf_path, nconfs=-1):
 
 
 def run_vina_docking(
-    input_sdf_path,
-    receptor_pdbqt,
-    box_center,
-    box_size,
-    output_csv_path=None,
-    nconfs=-1,
+    input_sdf_path: str,
+    receptor_pdbqt: str,
+    box_center: tuple,
+    box_size: tuple,
+    output_csv_path: str | None=None,
+    nconfs: int=-1,
     **task_configs,
-):
+) -> pd.DataFrame:
     if output_csv_path is not None:
         os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
 

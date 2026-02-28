@@ -17,6 +17,7 @@
 
 #include "bytedock/core/grid.h"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -121,6 +122,9 @@ void receptor_cache::populate(const torsional_receptor& receptor, size_t nthread
         const auto& movable = receptor.get_leaf(i).movable_atoms;
         excluded_.insert(movable.begin(), movable.end());
     }
+    // Build sorted vector for cache-friendly iteration
+    excluded_vec_.assign(excluded_.begin(), excluded_.end());
+    std::sort(excluded_vec_.begin(), excluded_vec_.end());
 
     // Precalculate with frozen atoms
     const size_t ni = bc_.npoints[0];
@@ -366,6 +370,8 @@ void receptor_cache::restore(const fs::path& map_dir, size_t nthreads) {
     ar >> bc_.npoints;
     ar >> bc_.spacing;
     ar >> excluded_;
+    excluded_vec_.assign(excluded_.begin(), excluded_.end());
+    std::sort(excluded_vec_.begin(), excluded_vec_.end());
     fill_derived_fields(bc_);
 
     // Restore grids in parallel

@@ -15,7 +15,7 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifdef ENABLE_SIMD_AVX2
+#ifdef BDOCK_HAS_SIMD
 #include "bytedock/simd/avx2_def.h"
 
 #include "test_lib.h"
@@ -167,23 +167,32 @@ TEST(SimdDoubleTest, InvSqrt) {
 }
 
 TEST(SimdFloatTest, SumElements) {
-    alignas(BDOCK_SIMD_ALIGNMENT) float buffer[] = {
-        1.f, -2.f, 3.f, 4.f, -5.f, 6.f, 7.f, 8.f
-    };
+    alignas(BDOCK_SIMD_ALIGNMENT) float buffer[BDOCK_SIMD_FLOAT_WIDTH];
+    float expected = 0;
+    for (int i = 0; i < BDOCK_SIMD_FLOAT_WIDTH; ++i) {
+        buffer[i] = static_cast<float>(i * 3 - 5);
+        expected += buffer[i];
+    }
     auto a = simd_reduce(simd_load(buffer));
-    EXPECT_NEAR(a, 22, 1e-6);
+    EXPECT_NEAR(a, expected, 1e-6);
 }
 
 TEST(SimdDoubleTest, SumElements) {
-    alignas(BDOCK_SIMD_ALIGNMENT) double buffer[] = {1., -12., 23., 74.};
+    alignas(BDOCK_SIMD_ALIGNMENT) double buffer[BDOCK_SIMD_DOUBLE_WIDTH];
+    double expected = 0;
+    for (int i = 0; i < BDOCK_SIMD_DOUBLE_WIDTH; ++i) {
+        buffer[i] = static_cast<double>(i * 7 - 12);
+        expected += buffer[i];
+    }
     auto a = simd_reduce(simd_load(buffer));
-    EXPECT_NEAR(a, 86, 1e-15);
+    EXPECT_NEAR(a, expected, 1e-15);
 }
 
 TEST(SimdFloatTest, LoadXYZ) {
-    float coords[BDOCK_SIMD_ALIGNMENT];  // Larger than 3*BDOCK_SIMD_FLOAT_WIDTH
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) coords[i] = i;
-    std::int32_t offsets[] = {9, 7, 6, 5, 3, 2, 1, 0};
+    static constexpr int N = 48;  // Enough for max offset * 3
+    float coords[N];
+    for (int i = 0; i < N; ++i) coords[i] = static_cast<float>(i);
+    std::int32_t offsets[] = {9, 7, 6, 5, 3, 2, 1, 0};  // First WIDTH used
     simd_float rx, ry, rz;
     simd_loadu_xyz(coords, offsets, rx, ry, rz);
     float m_rx[BDOCK_SIMD_FLOAT_WIDTH], m_ry[BDOCK_SIMD_FLOAT_WIDTH],
@@ -200,9 +209,10 @@ TEST(SimdFloatTest, LoadXYZ) {
 }
 
 TEST(SimdDoubleTest, LoadXYZ) {
-    double coords[BDOCK_SIMD_ALIGNMENT];  // Larger than 3*BDOCK_SIMD_DOUBLE_WIDTH
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) coords[i] = i;
-    std::int32_t offsets[] = {8, 5, 4, 1};
+    static constexpr int N = 48;
+    double coords[N];
+    for (int i = 0; i < N; ++i) coords[i] = static_cast<double>(i);
+    std::int32_t offsets[] = {8, 5, 4, 1};  // First WIDTH used
     simd_double rx, ry, rz;
     simd_loadu_xyz(coords, offsets, rx, ry, rz);
     double m_rx[BDOCK_SIMD_DOUBLE_WIDTH], m_ry[BDOCK_SIMD_DOUBLE_WIDTH],
@@ -219,125 +229,93 @@ TEST(SimdDoubleTest, LoadXYZ) {
 }
 
 TEST(SimdFloatTest, IncrXYZ) {
-    float grads[BDOCK_SIMD_ALIGNMENT];  // Larger than 3*BDOCK_SIMD_FLOAT_WIDTH
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) grads[i] = -12.f;
-    std::int32_t offsets[] = {9, 7, 6, 5, 3, 2, 1, 0};
-    alignas(BDOCK_SIMD_ALIGNMENT) float buffer[] = {
-        1.f, 4.f, 7.f, 10.f, 13.f, 16.f, 19.f, 22.f,
-        2.f, 5.f, 8.f, 11.f, 14.f, 17.f, 20.f, 23.f,
-        3.f, 6.f, 9.f, 12.f, 15.f, 18.f, 21.f, 24.f
-    };
+    static constexpr int N = 48;
+    const float init_val = -12.f;
+    float grads[N], ref[N];
+    for (int i = 0; i < N; ++i) grads[i] = ref[i] = init_val;
+    std::int32_t offsets[] = {9, 7, 6, 5, 3, 2, 1, 0};  // First WIDTH used
+    alignas(BDOCK_SIMD_ALIGNMENT) float buffer[3 * BDOCK_SIMD_FLOAT_WIDTH];
+    for (int i = 0; i < 3 * BDOCK_SIMD_FLOAT_WIDTH; ++i)
+        buffer[i] = static_cast<float>(i + 1);
     simd_float rx = simd_load(buffer);
     simd_float ry = simd_load(buffer + BDOCK_SIMD_FLOAT_WIDTH);
     simd_float rz = simd_load(buffer + 2*BDOCK_SIMD_FLOAT_WIDTH);
     simd_incru_xyz(grads, offsets, rx, ry, rz);
-    float ref[] = {
-         10.f,  11.f,  12.f,
-          7.f,   8.f,   9.f,
-          4.f,   5.f,   6.f,
-          1.f,   2.f,   3.f,
-        -12.f, -12.f, -12.f,
-         -2.f,  -1.f,   0.f,
-         -5.f,  -4.f,  -3.f,
-         -8.f,  -7.f,  -6.f,
-        -12.f, -12.f, -12.f,
-        -11.f, -10.f,  -9.f,
-        -12.f, -12.f
-    };
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) {
+    for (int i = 0; i < BDOCK_SIMD_FLOAT_WIDTH; ++i) {
+        ref[3*offsets[i] + 0] += buffer[i];
+        ref[3*offsets[i] + 1] += buffer[BDOCK_SIMD_FLOAT_WIDTH + i];
+        ref[3*offsets[i] + 2] += buffer[2*BDOCK_SIMD_FLOAT_WIDTH + i];
+    }
+    for (int i = 0; i < N; ++i) {
         EXPECT_NEAR(ref[i], grads[i], 1e-6);
     }
 }
 
 TEST(SimdDoubleTest, IncrXYZ) {
-    double grads[BDOCK_SIMD_ALIGNMENT];  // Larger than 3*BDOCK_SIMD_DOUBLE_WIDTH
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) grads[i] = 5.;
-    std::int32_t offsets[] = {8, 5, 4, 1};
-    alignas(BDOCK_SIMD_ALIGNMENT) double buffer[] = {
-        -1.,  4.,  7., -10.,
-         2., -5.,  8., -11.,
-         3.,  6., -9.,  12.,
-    };
+    static constexpr int N = 48;
+    const double init_val = 5.;
+    double grads[N], ref[N];
+    for (int i = 0; i < N; ++i) grads[i] = ref[i] = init_val;
+    std::int32_t offsets[] = {8, 5, 4, 1};  // First WIDTH used
+    alignas(BDOCK_SIMD_ALIGNMENT) double buffer[3 * BDOCK_SIMD_DOUBLE_WIDTH];
+    for (int i = 0; i < 3 * BDOCK_SIMD_DOUBLE_WIDTH; ++i)
+        buffer[i] = static_cast<double>(i * 2 - 3);
     simd_double rx = simd_load(buffer);
     simd_double ry = simd_load(buffer + BDOCK_SIMD_DOUBLE_WIDTH);
     simd_double rz = simd_load(buffer + 2*BDOCK_SIMD_DOUBLE_WIDTH);
     simd_incru_xyz(grads, offsets, rx, ry, rz);
-    double ref[] = {
-         5.,  5.,  5.,
-        -5., -6., 17.,
-         5.,  5.,  5.,
-         5.,  5.,  5.,
-        12., 13., -4.,
-         9.,  0., 11.,
-         5.,  5.,  5.,
-         5.,  5.,  5.,
-         4.,  7.,  8.,
-         5.,  5.,  5.,
-         5.,  5.
-    };
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) {
+    for (int i = 0; i < BDOCK_SIMD_DOUBLE_WIDTH; ++i) {
+        ref[3*offsets[i] + 0] += buffer[i];
+        ref[3*offsets[i] + 1] += buffer[BDOCK_SIMD_DOUBLE_WIDTH + i];
+        ref[3*offsets[i] + 2] += buffer[2*BDOCK_SIMD_DOUBLE_WIDTH + i];
+    }
+    for (int i = 0; i < N; ++i) {
         EXPECT_NEAR(ref[i], grads[i], 1e-15);
     }
 }
 
 TEST(SimdFloatTest, DecrXYZ) {
-    float grads[BDOCK_SIMD_ALIGNMENT];  // Larger than 3*BDOCK_SIMD_FLOAT_WIDTH
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) grads[i] = -9.f;
-    std::int32_t offsets[] = {9, 8, 7, 5, 4, 3, 2, 1};
-    float buffer[] = {
-         1.f,  4.f, -7.f,  10.f, -13.f, -16.f, -19.f, 22.f,
-        -2.f,  5.f,  8.f, -11.f, -14.f,  17.f, -20.f, 23.f,
-         3.f, -6.f,  9.f, -12.f,  15.f, -18.f, -21.f, 24.f
-    };
+    static constexpr int N = 48;
+    const float init_val = -9.f;
+    float grads[N], ref[N];
+    for (int i = 0; i < N; ++i) grads[i] = ref[i] = init_val;
+    std::int32_t offsets[] = {9, 8, 7, 5, 4, 3, 2, 1};  // First WIDTH used
+    float buffer[3 * BDOCK_SIMD_FLOAT_WIDTH];
+    for (int i = 0; i < 3 * BDOCK_SIMD_FLOAT_WIDTH; ++i)
+        buffer[i] = static_cast<float>(i * 3 - 7);
     simd_float rx = simd_loadu(buffer);
     simd_float ry = simd_loadu(buffer + BDOCK_SIMD_FLOAT_WIDTH);
     simd_float rz = simd_loadu(buffer + 2*BDOCK_SIMD_FLOAT_WIDTH);
     simd_decru_xyz(grads, offsets, rx, ry, rz);
-    float ref[] = {
-         -9.f,  -9.f,  -9.f,
-        -31.f, -32.f, -33.f,
-         10.f,  11.f,  12.f,
-          7.f, -26.f,   9.f,
-          4.f,   5.f, -24.f,
-        -19.f,   2.f,   3.f,
-         -9.f,  -9.f,  -9.f,
-         -2.f, -17.f, -18.f,
-        -13.f, -14.f,  -3.f,
-        -10.f,  -7.f, -12.f,
-         -9.f,  -9.f
-    };
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) {
+    for (int i = 0; i < BDOCK_SIMD_FLOAT_WIDTH; ++i) {
+        ref[3*offsets[i] + 0] -= buffer[i];
+        ref[3*offsets[i] + 1] -= buffer[BDOCK_SIMD_FLOAT_WIDTH + i];
+        ref[3*offsets[i] + 2] -= buffer[2*BDOCK_SIMD_FLOAT_WIDTH + i];
+    }
+    for (int i = 0; i < N; ++i) {
         EXPECT_NEAR(ref[i], grads[i], 1e-6);
     }
 }
 
 TEST(SimdDoubleTest, DecrXYZ) {
-    double grads[BDOCK_SIMD_ALIGNMENT];  // Larger than 3*BDOCK_SIMD_DOUBLE_WIDTH
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) grads[i] = 17.;
-    std::int32_t offsets[] = {7, 6, 3, 0};
-    alignas(BDOCK_SIMD_ALIGNMENT) double buffer[] = {
-         1.,  4., -7.,  10.,
-        -2.,  5., -8.,  11.,
-         3., -6.,  9., -12.,
-    };
+    static constexpr int N = 48;
+    const double init_val = 17.;
+    double grads[N], ref[N];
+    for (int i = 0; i < N; ++i) grads[i] = ref[i] = init_val;
+    std::int32_t offsets[] = {7, 6, 3, 0};  // First WIDTH used
+    alignas(BDOCK_SIMD_ALIGNMENT) double buffer[3 * BDOCK_SIMD_DOUBLE_WIDTH];
+    for (int i = 0; i < 3 * BDOCK_SIMD_DOUBLE_WIDTH; ++i)
+        buffer[i] = static_cast<double>(i * 4 - 1);
     simd_double rx = simd_loadu(buffer);
     simd_double ry = simd_loadu(buffer + BDOCK_SIMD_DOUBLE_WIDTH);
     simd_double rz = simd_loadu(buffer + 2*BDOCK_SIMD_DOUBLE_WIDTH);
     simd_decru_xyz(grads, offsets, rx, ry, rz);
-    double ref[] = {
-         7.,  6., 29.,
-        17., 17., 17.,
-        17., 17., 17.,
-        24., 25.,  8.,
-        17., 17., 17.,
-        17., 17., 17.,
-        13., 12., 23.,
-        16., 19., 14.,
-        17., 17., 17.,
-        17., 17., 17.,
-        17., 17.
-    };
-    for (int i = 0; i < BDOCK_SIMD_ALIGNMENT; ++i) {
+    for (int i = 0; i < BDOCK_SIMD_DOUBLE_WIDTH; ++i) {
+        ref[3*offsets[i] + 0] -= buffer[i];
+        ref[3*offsets[i] + 1] -= buffer[BDOCK_SIMD_DOUBLE_WIDTH + i];
+        ref[3*offsets[i] + 2] -= buffer[2*BDOCK_SIMD_DOUBLE_WIDTH + i];
+    }
+    for (int i = 0; i < N; ++i) {
         EXPECT_NEAR(ref[i], grads[i], 1e-15);
     }
 }

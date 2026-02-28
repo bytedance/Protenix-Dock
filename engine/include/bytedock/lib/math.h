@@ -227,6 +227,23 @@ inline void cross_product_3d(const param_t* v1, const param_t* v2, param_t* out)
 const param_t kMathPi = 3.141592653589793;
 const param_t kMathTwoPi = 2 * kMathPi;
 
+// Super-Fibonacci spiral sampling on SO(3) (Alexa, CVPR 2022)
+// Produces low-discrepancy quaternions for deterministic rotational coverage
+inline void super_fibonacci_quaternion(size_t index, size_t total, param_t* q) {
+    const param_t phi = 1.4142135623730951;  // sqrt(2)
+    const param_t psi = 1.5337512036741143;  // plastic constant
+    param_t s = static_cast<param_t>(index) + 0.5_r;
+    param_t n = static_cast<param_t>(total);
+    param_t r = std::sqrt(s / n);
+    param_t R = std::sqrt(1.0_r - s / n);
+    param_t alpha = kMathTwoPi * s / phi;
+    param_t beta = kMathTwoPi * s / psi;
+    q[0] = r * std::sin(alpha);
+    q[1] = r * std::cos(alpha);
+    q[2] = R * std::sin(beta);
+    q[3] = R * std::cos(beta);
+}
+
 #define MATH_TO_DEGREE(x) ((x) / kMathPi * 180_r)
 #define MATH_TO_RADIAN(x) ((x) / 180_r * kMathPi)
 

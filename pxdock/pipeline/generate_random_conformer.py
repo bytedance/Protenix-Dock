@@ -23,8 +23,7 @@ from rdkit.Chem import AllChem, Descriptors
 
 
 def clear_all_properties(mol):
-    prop_names = list(mol.GetPropNames())
-    for prop_name in prop_names:
+    for prop_name in mol.GetPropNames():
         mol.ClearProp(prop_name)
     return mol
 
@@ -34,6 +33,7 @@ def get_heavy_atom_indices(mol):
 
 
 def aligned_rmsd_of_heavy_atoms(mol1, mol2):
+    # TODO: include permutations?
     mol1 = copy.deepcopy(mol1)
     mol2 = copy.deepcopy(mol2)
     heavy_atom_indices = get_heavy_atom_indices(mol1)

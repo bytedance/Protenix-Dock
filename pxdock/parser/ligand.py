@@ -205,7 +205,7 @@ class LigandParser:
         self.bonds = self.rkmol.GetBonds()
         self.num_bonds = len(self.bonds)
         self.bond_index = [
-            sorted([int(bond.GetBeginAtomIdx()), int(bond.GetEndAtomIdx())])
+            sorted((int(bond.GetBeginAtomIdx()), int(bond.GetEndAtomIdx())))
             for bond in self.bonds
         ]
 
@@ -358,7 +358,7 @@ class LigandParser:
         all_conformers = []
 
         for conf in rkconfs:
-            coords = np.vstack([conf.GetAtomPosition(idx) for idx in range(natoms)])
+            coords = np.array(conf.GetPositions(), dtype=np.float64)
             conformer = Conformer(coords, atomic_numbers)
             confprops = conf.GetPropsAsDict()
             for k, v in confprops.items():

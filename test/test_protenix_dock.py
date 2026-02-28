@@ -38,16 +38,16 @@ class ProtenixDockTest(unittest.TestCase):
         pocket_config = parse_pocket_config(
             os.path.join(current_dir, "../examples/5s8i_pocket.config")
         )
-        cls.box_center = [
+        cls.box_center = (
             pocket_config["center_x"],
             pocket_config["center_y"],
             pocket_config["center_z"],
-        ]
-        cls.box_size = [
+        )
+        cls.box_size = (
             pocket_config["size_x"],
             pocket_config["size_y"],
             pocket_config["size_z"],
-        ]
+        )
 
     @pytest.mark.slow
     def test_pose_opt_with_cache(self):
@@ -91,6 +91,71 @@ class ProtenixDockTest(unittest.TestCase):
         )
         logger.info(f"prune_docking with cache result: {docking_res_files}")
         dock_instance.drop_cache_maps()
+
+    @pytest.mark.slow
+    def test_score_complex(self):
+        dock_instance = ProtenixDock(self.receptor_pdb)
+        dock_instance.set_box(self.box_center, self.box_size)
+        scores = dock_instance.score_complex(self.ligand_sdf)
+        logger.info(f"score_complex result: {scores}")
+        self.assertIsInstance(scores, list)
+        self.assertGreater(len(scores), 0)
+        for entry in scores:
+            self.assertIn("ligand_file", entry)
+            self.assertIn("pose_id", entry)
+            self.assertIn("pscore", entry)
+            self.assertIn("bscore", entry)
+            self.assertIsInstance(entry["pose_id"], int)
+            self.assertIsInstance(entry["pscore"], float)
+
+    @pytest.mark.slow
+    def test_score_complex_with_cache(self):
+        dock_instance = ProtenixDock(self.receptor_pdb)
+        dock_instance.set_box(self.box_center, self.box_size)
+        dock_instance.generate_cache_maps(spacing=0.5)
+        scores = dock_instance.score_complex(self.ligand_sdf)
+        logger.info(f"score_complex with cache result: {scores}")
+        self.assertIsInstance(scores, list)
+        self.assertGreater(len(scores), 0)
+        dock_instance.drop_cache_maps()
+
+
+class ParseScoresTest(unittest.TestCase):
+
+    def test_parse_scores(self):
+        import tempfile
+        csv_content = (
+            "ligand_file,pose_id,pscore,bscore\n"
+            "ligand_a.json,0,-8.123,0.0\n"
+            "ligand_a.json,1,-7.456,0.0\n"
+            "ligand_b.json,0,-6.789,-5.432\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write(csv_content)
+            tmp_path = f.name
+        try:
+            results = ProtenixDock._parse_scores(tmp_path)
+            self.assertEqual(len(results), 3)
+            self.assertEqual(results[0]["ligand_file"], "ligand_a.json")
+            self.assertEqual(results[0]["pose_id"], 0)
+            self.assertAlmostEqual(results[0]["pscore"], -8.123)
+            self.assertAlmostEqual(results[0]["bscore"], 0.0)
+            self.assertEqual(results[2]["ligand_file"], "ligand_b.json")
+            self.assertAlmostEqual(results[2]["bscore"], -5.432)
+        finally:
+            os.remove(tmp_path)
+
+    def test_parse_scores_empty(self):
+        import tempfile
+        csv_content = "ligand_file,pose_id,pscore,bscore\n"
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write(csv_content)
+            tmp_path = f.name
+        try:
+            results = ProtenixDock._parse_scores(tmp_path)
+            self.assertEqual(results, [])
+        finally:
+            os.remove(tmp_path)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,10 @@
 #include "bytedock/core/pair.h"
 #include "bytedock/lib/utility.h"
 
+#ifdef BDOCK_HAS_OPENMP
+#include <omp.h>
+#endif
+
 namespace bytedock {
 
 std::unordered_map<std::string, param_t> abstract_scorer::summary(
@@ -186,11 +190,16 @@ instant_cache root_scorer::precalculate(
     const molecule_pose& ligand_xyz, const force_field_params& ligand_ffdata
 ) const {
     instant_cache memo;
-    memo.distance_map.resize(ligand_xyz.size() * receptor_xyz.size());
-    size_t offset = 0;
-    for (size_t i = 0; i < ligand_xyz.size(); i++) {
+    const size_t n_lig = ligand_xyz.size();
+    const size_t n_rec = receptor_xyz.size();
+    memo.distance_map.resize(n_lig * n_rec);
+#ifdef BDOCK_HAS_OPENMP
+    #pragma omp parallel for schedule(dynamic)
+#endif
+    for (size_t i = 0; i < n_lig; i++) {
         const atom_position& xyz1 = ligand_xyz[i];
-        for (size_t j = 0; j < receptor_xyz.size(); j++) {
+        size_t offset = i * n_rec;
+        for (size_t j = 0; j < n_rec; j++) {
             memo.distance_map[offset] = get_distance_3d(xyz1.xyz, receptor_xyz[j].xyz);
             ++offset;
         }
@@ -245,7 +254,7 @@ void mm_interaction_vdw_energy::bind_to_system(
     }
 }
 
-#ifdef ENABLE_SIMD_AVX2
+#ifdef BDOCK_HAS_SIMD
 param_t mm_interaction_vdw_energy::report(
     const molecule_pose& receptor_xyz,
     const force_field_params& receptor_ffdata,
@@ -271,9 +280,9 @@ param_t mm_interaction_vdw_energy::report(
 }
 
 param_t mm_interaction_vdw_energy::report_nosimd(
-#else
+#else  // !BDOCK_HAS_SIMD
 param_t mm_interaction_vdw_energy::report(
-#endif
+#endif  // BDOCK_HAS_SIMD
     const molecule_pose& receptor_xyz,
     const force_field_params& receptor_ffdata,
     const molecule_pose& ligand_xyz,
@@ -306,19 +315,18 @@ param_t mm_interaction_coulomb_energy::report(
     const molecule_pose& ligand_xyz, const force_field_params& ligand_ffdata,
     const instant_cache* pose_memo
 ) const {
-    param_t energy = 0., distance, q1;
+    param_t energy = 0., distance, q1k;
+    const auto& rcharges = receptor_ffdata.partial_charges;
     size_t offset = 0;
     for (size_t i = 0; i < ligand_xyz.size(); i++) {
-        q1 = ligand_ffdata.partial_charges[i];
+        q1k = ligand_ffdata.partial_charges[i] * kCoulombFactor;
         for (size_t j = 0; j < receptor_xyz.size(); j++) {
             if (pose_memo == nullptr) {
                 distance = get_distance_3d(ligand_xyz[i].xyz, receptor_xyz[j].xyz);
             } else {
                 distance = pose_memo->distance_map[offset];
             }
-            energy += safe_divide(
-                q1 * receptor_ffdata.partial_charges[j], distance
-            ) * kCoulombFactor;
+            energy += safe_divide(q1k * rcharges[j], distance);
             ++offset;
         }
     }
@@ -890,27 +898,35 @@ param_t gbsa_total_energy::calculate(
     }
 
     // Calculate egb & esa
+    // Precompute constants used in the inner loops
+    param_t prefactor_solute = 0.5_r * kCoulombFactor / solute_dielectric_;
+    param_t prefactor_solvent_inv = 0.5_r * kCoulombFactor / solvent_dielectric_;
+
+    // Diagonal terms (i == j): f = born_radii[i]
     param_t egb = 0.;
     for (size_t i = 0; i < natoms; ++i) {
-        for (size_t j = 0; j < natoms; ++j) {
-            if (i == j) {
-                U = born_radii[i];  // U => f
-            } else {
-                // r12 => r12_squared, r12_inv => born_radius_product, U => f
-                r12 = get_distance_square_3d(coords[i].xyz, coords[j].xyz);
-                r12_inv = born_radii[i] * born_radii[j];
-                U = safe_sqrt(r12 + r12_inv * std::exp(-0.25_r * r12 / r12_inv));
-            }
-            L = 0.5_r * kCoulombFactor * (
-                1_r / solute_dielectric_ - std::exp(-kappa_ * U) / solvent_dielectric_
-            );  // => `prefactor`
-            egb -= charges[i] * charges[j] / U * L;
+        U = born_radii[i];
+        L = prefactor_solute - prefactor_solvent_inv * std::exp(-kappa_ * U);
+        egb -= charges[i] * charges[i] / U * L;
+    }
+    // Off-diagonal terms: symmetric, so compute i<j and double
+    for (size_t i = 0; i < natoms; ++i) {
+        param_t qi = charges[i];
+        param_t bi = born_radii[i];
+        for (size_t j = i + 1; j < natoms; ++j) {
+            r12 = get_distance_square_3d(coords[i].xyz, coords[j].xyz);
+            r12_inv = bi * born_radii[j];
+            U = safe_sqrt(r12 + r12_inv * std::exp(-0.25_r * r12 / r12_inv));
+            L = prefactor_solute - prefactor_solvent_inv * std::exp(-kappa_ * U);
+            egb -= 2_r * qi * charges[j] / U * L;
         }
     }
     param_t esa = 0.;
     for (size_t i = 0; i < natoms; ++i) {
-        esa += square(radii[i] + probe_radius_)
-             * std::pow(radii[i] / born_radii[i], 6_r);
+        param_t ratio = radii[i] / born_radii[i];
+        param_t r2 = ratio * ratio;
+        param_t r6 = r2 * r2 * r2;
+        esa += square(radii[i] + probe_radius_) * r6;
     }
     return egb + esa * surface_energy_;
 }

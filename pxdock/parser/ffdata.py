@@ -15,14 +15,15 @@
 
 import os
 import subprocess
-from itertools import combinations
 
+import numpy as np
 import parmed as pmd
 from parmed.amber import AmberParm
 
 from pxdock.common import get_logger
 from pxdock.common.amber_forcefield import (
     AMBERFF_ATOMTYPES,
+    AMBERFF_ATOMTYPES2idx,
     FORCEFIELD,
     FORCEFIELD_WATER_ION,
 )
@@ -106,7 +107,13 @@ def pdb_to_parm(working_dir, pdbfile, forcefield="FF14SB"):
     else:
         import pdb4amber
 
-        pdb4amber.main(command[1:])
+        pdb4amber.run(
+            arg_pdbin=pdbfile,
+            arg_pdbout=amber_pdb,
+            arg_nohyd=True,
+            arg_dry=True,
+            arg_conect=False,
+        )
     prmtop = os.path.join(working_dir, "step2_protein_amber.prmtop")
     inpcrd = os.path.join(working_dir, "step2_protein_amber.inpcrd")
     tleap_in = [
@@ -129,13 +136,26 @@ def pdb_to_parm(working_dir, pdbfile, forcefield="FF14SB"):
         "-I",
         amberff_dir,
     ]
-    run_cmd(working_dir, command, "tleap", "", logger)
+    ret = run_cmd(working_dir, command, "tleap", "", logger)
+    if ret != 0:
+        raise RuntimeError(
+            f"tleap exited with error code {ret}. "
+            f"Check logs at {os.path.join(working_dir, 'tleap_stdout.log')} "
+            f"and {os.path.join(working_dir, 'tleap_stderr.log')}"
+        )
+    if not os.path.exists(prmtop) or not os.path.exists(inpcrd):
+        raise FileNotFoundError(
+            f"tleap did not produce expected output files. "
+            f"This usually means the PDB structure has residues or atoms "
+            f"incompatible with the AMBER force field. "
+            f"Check {os.path.join(working_dir, 'tleap_stdout.log')} for details."
+        )
     parm = pmd.load_file(prmtop, inpcrd)
 
     return parm
 
 
-def parm_to_ffdata(parm: AmberParm) -> dict[str, list]:
+def parm_to_ffdata(parm: AmberParm) -> tuple[dict[str, list], list[tuple[float]]]:
     """
     Parse required forcefield parameters from an AmberParm object.
     Only restricted types of forcefield terms are allowed.
@@ -145,22 +165,34 @@ def parm_to_ffdata(parm: AmberParm) -> dict[str, list]:
 
     Returns:
         dict: A dictionary containing forcefield data.
-        list: The xyz coordinates of the atoms.
+        list: The xyz coordinates of the atoms. (N, 3)
     """
     ffdata = {}
     assert not parm.adjusts
     assert not parm.impropers
     assert not parm.rb_torsions
-    assert all([not atom.children for atom in parm.atoms])
-    assert all([i == atom.idx for i, atom in enumerate(parm.atoms)])
-    ffdata["partial_charges"] = [atom.charge for atom in parm.atoms]
-    ffdata["atomic_numbers"] = [atom.atomic_number for atom in parm.atoms]
-    ffdata["FF_vdW_sigma"] = [float(atom.sigma) for atom in parm.atoms]
-    ffdata["FF_vdW_epsilon"] = [float(atom.epsilon) for atom in parm.atoms]
-    ffdata["FF_vdW_atomidx"] = [[atom.idx] for atom in parm.atoms]
-    ffdata["FF_vdW_paraidx"] = [
-        AMBERFF_ATOMTYPES.index(atom.atom_type.name) + 1000 for atom in parm.atoms
-    ]
+
+    partial_charges = []
+    atomic_numbers = []
+    vdw_sigma = []
+    vdw_epsilon = []
+    vdw_atomidx = []
+    vdw_paraidx = []
+    for i, atom in enumerate(parm.atoms):
+        assert not atom.children
+        assert i == atom.idx
+        partial_charges.append(atom.charge)
+        atomic_numbers.append(atom.atomic_number)
+        vdw_sigma.append(float(atom.sigma))
+        vdw_epsilon.append(float(atom.epsilon))
+        vdw_atomidx.append([atom.idx])
+        vdw_paraidx.append(AMBERFF_ATOMTYPES2idx[atom.atom_type.name] + 1000)
+    ffdata["partial_charges"] = partial_charges
+    ffdata["atomic_numbers"] = atomic_numbers
+    ffdata["FF_vdW_sigma"] = vdw_sigma
+    ffdata["FF_vdW_epsilon"] = vdw_epsilon
+    ffdata["FF_vdW_atomidx"] = vdw_atomidx
+    ffdata["FF_vdW_paraidx"] = vdw_paraidx
     check_vdw_paraidx(
         ffdata["FF_vdW_sigma"], ffdata["FF_vdW_epsilon"], ffdata["FF_vdW_paraidx"]
     )
@@ -172,7 +204,7 @@ def parm_to_ffdata(parm: AmberParm) -> dict[str, list]:
     for key in ALL_FF_KEYS:
         assert key in ffdata, key
 
-    xyz = [[atom.xx, atom.xy, atom.xz] for atom in parm.atoms]
+    xyz = [(atom.xx, atom.xy, atom.xz) for atom in parm.atoms]
     return ffdata, xyz
 
 
@@ -196,29 +228,50 @@ def calc_nonbonded_atomidx(
         "FF_ProperTorsions_atomidx",
     ]:
         assert key in ffdata
-    nonbonded12 = set([tuple(sorted([p[0], p[1]])) for p in ffdata["FF_Bonds_atomidx"]])
-    nonbonded13 = set(
-        [tuple(sorted([p[0], p[2]])) for p in ffdata["FF_Angles_atomidx"]]
-    )
-    nonbonded14 = (
-        set([tuple(sorted([p[0], p[3]])) for p in ffdata["FF_ProperTorsions_atomidx"]])
-        - nonbonded12
-        - nonbonded13
-    )
-    nonbondedall = set(
-        map(
-            tuple,
-            map(
-                sorted,
-                combinations([atomidx[0] for atomidx in ffdata["FF_vdW_atomidx"]], 2),
-            ),
-        )
-    )
 
-    nonbondedall -= nonbonded14 | nonbonded13 | nonbonded12
-    nonbondedall, nonbonded14 = list(nonbondedall), list(nonbonded14)
+    def _encode_pairs(pairs):
+        """Encode sorted (i, j) pairs as single int64 for fast set ops."""
+        arr = np.array(pairs, dtype=np.int64)
+        if arr.size == 0:
+            return np.empty(0, dtype=np.int64)
+        a, b = arr[:, 0], arr[:, 1]
+        lo = np.minimum(a, b)
+        hi = np.maximum(a, b)
+        return lo * n_atoms + hi
+
+    n_atoms = len(ffdata["FF_vdW_atomidx"])
+
+    bond_pairs = [(p[0], p[1]) for p in ffdata["FF_Bonds_atomidx"]]
+    angle_pairs = [(p[0], p[2]) for p in ffdata["FF_Angles_atomidx"]]
+    torsion_pairs = [(p[0], p[3]) for p in ffdata["FF_ProperTorsions_atomidx"]]
+
+    enc12 = _encode_pairs(bond_pairs)
+    enc13 = _encode_pairs(angle_pairs)
+    enc_torsion = _encode_pairs(torsion_pairs)
+
+    # 1-4 pairs = torsion pairs minus 1-2 and 1-3
+    exclude_from_14 = np.union1d(enc12, enc13)
+    enc14 = np.setdiff1d(np.unique(enc_torsion), exclude_from_14)
+
+    # all pairs via triu_indices minus 1-2, 1-3, 1-4
+    idx_i, idx_j = np.triu_indices(n_atoms, k=1)
+    enc_all = idx_i.astype(np.int64) * n_atoms + idx_j.astype(np.int64)
+    exclude_all = np.union1d(exclude_from_14, enc14)
+    enc_nonbonded = np.setdiff1d(enc_all, exclude_all)
+
+    # decode back to tuple lists
+    def _decode(enc):
+        if enc.size == 0:
+            return []
+        lo = enc // n_atoms
+        hi = enc % n_atoms
+        return list(zip(lo.tolist(), hi.tolist()))
+
+    nonbondedall = _decode(enc_nonbonded)
+    nonbonded14 = _decode(enc14)
     if sort_idx:
-        nonbondedall, nonbonded14 = sorted(nonbondedall), sorted(nonbonded14)
+        nonbondedall.sort()
+        nonbonded14.sort()
 
     return {
         "FF_NonbondedAll_atomidx": nonbondedall,
@@ -278,7 +331,7 @@ def parm_to_angle_params(parm: AmberParm) -> dict[str, list]:
     parm.angles.sort(key=lambda x: x.atom1.idx)
 
     ffdata["FF_Angles_atomidx"] = [
-        [angle.atom1.idx, angle.atom2.idx, angle.atom3.idx] for angle in parm.angles
+        (angle.atom1.idx, angle.atom2.idx, angle.atom3.idx) for angle in parm.angles
     ]
     ffdata["FF_Angles_k"] = [angle.type.k * 2.0 for angle in parm.angles]
     ffdata["FF_Angles_angle"] = [angle.type.theteq for angle in parm.angles]
@@ -338,12 +391,12 @@ def parm_to_torsion_params(parm: AmberParm, type: str = "Proper") -> dict[str, l
                 dihedral.atom4.idx,
             )
             ffdata[f"FF_{type}Torsions_atomidx"].append(
-                [
+                (
                     dihedral.atom1.idx,
                     dihedral.atom2.idx,
                     dihedral.atom3.idx,
                     dihedral.atom4.idx,
-                ]
+                )
             )
             ffdata[f"FF_{type}Torsions_periodicity"].append([dihedral.type.per])
             ffdata[f"FF_{type}Torsions_phase"].append([dihedral.type.phase])

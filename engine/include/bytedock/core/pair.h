@@ -19,7 +19,7 @@
 
 #include "bytedock/core/system.h"
 #include "bytedock/lib/math.h"
-#include "bytedock/simd/avx2_def.h"
+#include "bytedock/simd/simd_def.h"
 
 namespace bytedock {
 
@@ -30,14 +30,18 @@ inline void precalculate_coul_pair(const std::vector<param_t>& charges,
 
 inline void precalculate_vdw_pair(const lj_vdw* type_i, const lj_vdw* type_j,
                                   nonbonded_atom_pair& item) {
-    param_t sigma6 = std::pow((type_i->sigma + type_j->sigma) * 0.5_r, 6_r);
+    param_t sigma_half = (type_i->sigma + type_j->sigma) * 0.5_r;
+    param_t s2 = sigma_half * sigma_half;
+    param_t sigma6 = s2 * s2 * s2;
     item.c6 = 4_r * std::sqrt(type_i->epsilon * type_j->epsilon) * sigma6;
     item.c12 = item.c6 * sigma6;
 }
 
 inline void precalculate_vdw_pair(const lj_vdw& type_i, const lj_vdw& type_j,
                                   lj_vdw& item) {
-    param_t sigma6 = std::pow((type_i.sigma + type_j.sigma) * 0.5_r, 6_r);
+    param_t sigma_half = (type_i.sigma + type_j.sigma) * 0.5_r;
+    param_t s2 = sigma_half * sigma_half;
+    param_t sigma6 = s2 * s2 * s2;
     item.sigma = 4_r * std::sqrt(type_i.epsilon * type_j.epsilon) * sigma6;  // ->c6
     item.epsilon = item.sigma * sigma6;  // ->c12
 }
@@ -103,10 +107,12 @@ inline param_t calculate_vdw_pair(const lj_vdw& type_i,
                                   const param_t scale,
                                   atom_position& grad_i,
                                   atom_position& grad_j) {
-    param_t fused = (type_i.sigma + type_j.sigma) * 0.5_r;
-    param_t u6 = std::pow(safe_divide(fused, distance), 6_r);
-    param_t u12 = MATH_SQUARE_SCALAR(u6);
-    fused = std::sqrt(type_i.epsilon * type_j.epsilon) * scale * 4_r;
+    param_t sigma_half = (type_i.sigma + type_j.sigma) * 0.5_r;
+    param_t ratio = safe_divide(sigma_half, distance);
+    param_t r2 = ratio * ratio;
+    param_t u6 = r2 * r2 * r2;
+    param_t u12 = u6 * u6;
+    param_t fused = std::sqrt(type_i.epsilon * type_j.epsilon) * scale * 4_r;
     param_t irsqr = safe_divide(1_r, MATH_SQUARE_SCALAR(distance));
     param_t de_dr_r = (-12_r * u12 + 6_r * u6) * irsqr * fused;
     param_t grad[3];
@@ -127,7 +133,7 @@ inline param_t calculate_vdw_pair(const param_t c6, const param_t c12,
     return clamp(ir2 - ir, -cutoff, cutoff);
 }
 
-#ifdef ENABLE_SIMD_AVX2
+#ifdef BDOCK_HAS_SIMD
 static void calculate_nb_pairs(const std::vector<nonbonded_atom_pair>& pairs,
                                const param_t coul_scale, param_t vdw_scale,
                                const molecule_pose& mol_xyz,

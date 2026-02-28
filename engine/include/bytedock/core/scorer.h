@@ -28,7 +28,7 @@ namespace bytedock {
 
 // If coordinates of receptor or ligand change, cache should be reconstructed
 struct instant_cache {
-#ifdef ENABLE_SIMD_AVX2
+#ifdef BDOCK_HAS_SIMD
     simd_vector<param_t> distance_map;
 #else
     std::vector<param_t> distance_map;  // Shape is [ligand_natoms, receptor_natoms]
@@ -166,7 +166,7 @@ public:
         const force_field_params& ligand_ffdata,
         const instant_cache* pose_memo = nullptr
     ) const override;
-#if ENABLE_SIMD_AVX2  // For testing
+#if BDOCK_HAS_SIMD  // For testing
     param_t report_nosimd(
         const molecule_pose& receptor_xyz,
         const force_field_params& receptor_ffdata,

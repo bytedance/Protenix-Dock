@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import csv
 import logging
 import multiprocessing
 import os
@@ -23,11 +24,14 @@ from pxdock.dock.utils import kScoreConfigFile
 from pxdock.engine import ReusableEngine
 from pxdock.pipeline.prepare_ligand import prepare_ligand
 from pxdock.pipeline.prepare_receptor import prepare_receptor
+from pxdock.pipeline.get_pocket_info import compute_pocket_box
 from pxdock.vina.prepare_receptor import prepare_receptor_pdbqt
 from pxdock.vina.vina_docking import run_vina_docking
 
 
 class ProtenixDock(object):
+    """High-level Python API for Protenix-Dock molecular docking."""
+
     def __init__(
         self,
         receptor_pdb_file: str,
@@ -62,6 +66,10 @@ class ProtenixDock(object):
             raise RuntimeError(f"prepare_receptor failed {self._receptor_pdb}")
         self._engine = ReusableEngine(receptor_json, self._sf_file, self._nthreads)
         self._engine.set_box(*self.pocket_center, *self.box_size)
+
+    def autobox(self, ligand_path: str, buffer: float = 5.0):
+        box_center, box_size = compute_pocket_box(ligand_path, buffer=buffer)
+        self.set_box(box_center, box_size)
 
     def generate_cache_maps(
         self,
@@ -145,6 +153,45 @@ class ProtenixDock(object):
         )
 
         return out_dir
+
+    def score_complex(
+        self,
+        ligand_sdf_file: str,
+        out_dir: str = None,
+        include_affinity: bool = False,
+    ) -> List[dict]:
+        ligand_jsons = self._process_ligand(ligand_sdf_file)
+
+        ligand_index_file = os.path.join(
+            kWorkDir, f"{my_random_string()}_ligands.index"
+        )
+        with open(ligand_index_file, "w") as f:
+            for ligand_json in ligand_jsons:
+                ligand_abs_path = os.path.abspath(ligand_json)
+                f.write(ligand_abs_path)
+                f.write("\n")
+        if out_dir is None:
+            out_dir = os.path.join(kWorkDir, f"{my_random_string()}_score_out")
+        os.makedirs(out_dir, exist_ok=True)
+        output_csv = os.path.join(out_dir, "scores.csv")
+        self._engine.evaluate(ligand_index_file, output_csv,
+                              include_bscore=include_affinity)
+
+        return self._parse_scores(output_csv)
+
+    @staticmethod
+    def _parse_scores(csv_path: str) -> List[dict]:
+        results = []
+        with open(csv_path, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                results.append({
+                    "ligand_file": row["ligand_file"],
+                    "pose_id": int(row["pose_id"]),
+                    "pscore": float(row["pscore"]),
+                    "bscore": float(row["bscore"]),
+                })
+        return results
 
     def _prepare_json(
         self,
